@@ -265,6 +265,7 @@ export async function refreshPluginToken(
   site: SiteDescriptor,
   refreshToken: string,
   enterpriseId: string | undefined,
+  domain: string | undefined,
   fetcher: Fetch = globalThis.fetch,
   options: WorkBuddyRequestOptions = {},
 ): Promise<JsonRecord> {
@@ -275,11 +276,38 @@ export async function refreshPluginToken(
       "X-Refresh-Token": refreshToken,
       "X-Auth-Refresh-Source": site.auth.refreshSource,
       ...(enterpriseId ? { "X-Enterprise-Id": enterpriseId } : {}),
+      ...(domain ? { "X-Domain": domain } : {}),
     },
+    body: site.auth.refreshBody === "empty-json" ? "{}" : undefined,
   }, options);
   if (!response.ok) throw responseError(site, response, "token_refresh");
   const envelope = await readEnvelope(site, response);
   if (envelope.code !== 0) throw responseError(site, response, "token_refresh");
+  throwIfCancelled(site, options.signal);
+  return envelopeData(site, envelope, response);
+}
+
+export async function fetchPluginAccount(
+  site: SiteDescriptor,
+  accessToken: string,
+  domain: string,
+  fetcher: Fetch = globalThis.fetch,
+  options: WorkBuddyRequestOptions = {},
+): Promise<JsonRecord> {
+  if (!site.auth.accountPath) {
+    throw new WorkBuddyOAuthError("invalid_response", `${site.label} account finalize endpoint is unavailable`);
+  }
+  const response = await oauthFetch(site, fetcher, siteUrl(site, site.auth.accountPath), {
+    method: "GET",
+    headers: {
+      ...site.protocolHeaders,
+      Authorization: `Bearer ${accessToken}`,
+      "X-Domain": domain,
+    },
+  }, options);
+  if (!response.ok) throw responseError(site, response, "authorization_rejected");
+  const envelope = await readEnvelope(site, response);
+  if (envelope.code !== 0) throw responseError(site, response, "authorization_rejected");
   throwIfCancelled(site, options.signal);
   return envelopeData(site, envelope, response);
 }

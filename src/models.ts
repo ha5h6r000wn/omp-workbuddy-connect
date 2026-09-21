@@ -14,10 +14,13 @@ const EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
 type Effort = (typeof EFFORTS)[number];
 export type ModelScope = "free" | "all";
 
+export type FreeEvidence = "explicit-zero" | "non-zero" | "unknown";
+
 export interface ProductModel {
   id: string;
   name: string;
-  credits?: string;
+  creditsRaw?: string;
+  freeEvidence: FreeEvidence;
   contextWindow: number;
   maxTokens: number;
   supportsImages: boolean;
@@ -40,7 +43,7 @@ export interface ModelDiagnostic {
   message: string;
 }
 
-export type ProductConfigSource = "desktop-cache" | "builtin-fallback";
+export type ProductConfigSource = "desktop-cache" | "builtin-fallback" | "empty" | "unavailable";
 export type ProductConfigFallbackReason =
   | "missing"
   | "unreadable"
@@ -76,6 +79,15 @@ function positiveInteger(value: unknown): number | undefined {
 export function creditsAreFree(credits: string | undefined): boolean {
   if (credits === undefined) return false;
   return /^x?0(?:\.0+)?$/u.test(credits.trim());
+}
+
+function priceEvidence(value: unknown): { creditsRaw?: string; freeEvidence: FreeEvidence } {
+  if (typeof value !== "string" || value.trim() === "") return { freeEvidence: "unknown" };
+  const creditsRaw = value.trim();
+  return {
+    creditsRaw,
+    freeEvidence: creditsAreFree(creditsRaw) ? "explicit-zero" : "non-zero",
+  };
 }
 
 function isEffort(value: unknown): value is Effort {
@@ -141,7 +153,7 @@ function parseProductModel(
     model: {
       id,
       name: typeof row.name === "string" && row.name.trim() !== "" ? row.name.trim() : id,
-      ...(typeof row.credits === "string" && row.credits.trim() !== "" ? { credits: row.credits.trim() } : {}),
+      ...priceEvidence(row.credits),
       contextWindow,
       maxTokens,
       supportsImages: row.supportsImages === true && row.disabledMultimodal !== true,
@@ -198,11 +210,14 @@ export function parseProductConfig(text: string): ProductConfig | undefined {
   return "config" in result ? result.config : undefined;
 }
 
-function builtinFallback(
+function controlledFallback(
   site: SiteDescriptor,
   fallbackReason: ProductConfigFallbackReason,
   diagnostics: ModelDiagnostic[] = [],
 ): ProductConfig {
+  if (site.catalog.builtin.length === 0) {
+    return { source: "unavailable", fallbackReason, models: [], diagnostics };
+  }
   return { source: "builtin-fallback", fallbackReason, models: [...site.catalog.builtin], diagnostics };
 }
 
@@ -214,20 +229,22 @@ export function loadProductConfig(site: SiteDescriptor, path = productConfigPath
     const code = typeof error === "object" && error !== null && "code" in error
       ? error.code
       : undefined;
-    return builtinFallback(site, code === "ENOENT" ? "missing" : "unreadable");
+    return controlledFallback(site, code === "ENOENT" ? "missing" : "unreadable");
   }
 
   const parsed = parseProductDocument(text);
-  if ("fallbackReason" in parsed) return builtinFallback(site, parsed.fallbackReason);
+  if ("fallbackReason" in parsed) return controlledFallback(site, parsed.fallbackReason);
   if (parsed.declaredModelCount > 0 && parsed.config.models.length === 0) {
-    return builtinFallback(site, "no-valid-models", parsed.config.diagnostics);
+    return controlledFallback(site, "no-valid-models", parsed.config.diagnostics);
   }
+  if (parsed.declaredModelCount === 0) return { ...parsed.config, source: "empty" };
   return parsed.config;
 }
 
 export function freeModelIds(config: ProductConfig): readonly string[] {
-  if (config.source !== "desktop-cache") return [];
-  return config.models.filter((model) => creditsAreFree(model.credits)).map((model) => model.id);
+  return config.models
+    .filter((model) => model.freeEvidence === "explicit-zero")
+    .map((model) => model.id);
 }
 
 export function modelMaxTokens(site: SiteDescriptor, modelId: string, maxTokens: number): number {
@@ -250,7 +267,7 @@ export function buildOmpModels(site: SiteDescriptor, config: ProductConfig, scop
       return {
         id: model.id,
         // A missing multiplier is unknown evidence, not a rate: show the bare model name.
-        name: model.credits ? `${model.name} · ${model.credits}` : model.name,
+        name: model.creditsRaw ? `${model.name} · ${model.creditsRaw}` : model.name,
         reasoning: model.supportsReasoning,
         ...(hasCanonicalThinking
           ? {

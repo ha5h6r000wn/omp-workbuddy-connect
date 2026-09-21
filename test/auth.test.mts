@@ -1,11 +1,13 @@
 import { LoginCancelledError } from "@oh-my-pi/pi-ai/error";
 import type { OAuthCredentials } from "@oh-my-pi/pi-ai";
 import {
+  credentialDomain,
   credentialFromLoginResponse,
+  loginWorkBuddy,
   oauthFromWorkBuddy,
   refreshWorkBuddyOAuth,
 } from "../src/auth.ts";
-import { WORKBUDDY_INTL } from "../src/site.ts";
+import { WORKBUDDY_CN, WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -22,12 +24,7 @@ function complete(overrides: Record<string, unknown> = {}): Record<string, unkno
   };
 }
 
-const CN_SITE = {
-  ...WORKBUDDY_INTL,
-  providerId: "workbuddy-cn",
-  label: "WorkBuddy CN",
-  commandName: "workbuddy-cn",
-};
+const CN_SITE = WORKBUDDY_CN;
 
 let realmMessage = "";
 try {
@@ -149,6 +146,7 @@ assert(refreshed.email === previous.email, "refresh lost verified email");
 const refreshHeaders = new Headers(refreshRequest?.headers);
 assert(refreshHeaders.get("x-refresh-token") === "refresh-a", "refresh did not use host credential input");
 assert(refreshHeaders.get("x-enterprise-id") === "org-a", "refresh did not use host enterprise identity");
+assert(refreshRequest?.body === undefined, "international refresh unexpectedly gained a request body");
 
 const omittedRefreshFields: typeof fetch = async () => Response.json({
   code: 0,
@@ -193,11 +191,135 @@ const noEnterpriseRefresh: typeof fetch = async (_input, init) => {
   noEnterpriseRequest = init;
   return Response.json({ code: 0, data: { accessToken: "access-a4", expiresIn: 1800 } });
 };
-const noEnterprise = await refreshWorkBuddyOAuth(WORKBUDDY_INTL, { ...previous, orgId: undefined }, noEnterpriseRefresh, 10_000);
-assert(noEnterprise.orgId === undefined, "refresh fabricated an enterprise identity");
-const noEnterpriseHeaders = new Headers(noEnterpriseRequest?.headers);
-assert(noEnterpriseHeaders.get("x-enterprise-id") === null, "refresh sent a fabricated enterprise header");
-assert(noEnterpriseHeaders.get("x-no-enterprise-id") === null, "refresh sent a Chat-only no-enterprise marker");
+for (const orgId of [undefined, "", "   "]) {
+  const noEnterprise = await refreshWorkBuddyOAuth(WORKBUDDY_INTL, { ...previous, orgId }, noEnterpriseRefresh, 10_000);
+  assert(noEnterprise.orgId === undefined, `refresh preserved empty enterprise identity ${JSON.stringify(orgId)}`);
+  const noEnterpriseHeaders = new Headers(noEnterpriseRequest?.headers);
+  assert(noEnterpriseHeaders.get("x-enterprise-id") === null, `refresh sent empty enterprise header ${JSON.stringify(orgId)}`);
+  assert(noEnterpriseHeaders.get("x-no-enterprise-id") === null, "refresh sent a Chat-only no-enterprise marker");
+}
+
+const cnJwt = (issuer: string) => `x.${Buffer.from(JSON.stringify({ iss: issuer })).toString("base64url")}.y`;
+assert(
+  credentialDomain(WORKBUDDY_CN, cnJwt("https://copilot.tencent.com")) === "copilot.tencent.com",
+  "CN domain was not reconstructed from the persisted access token issuer",
+);
+for (const issuer of ["", "http://copilot.tencent.com", "https://user@copilot.tencent.com", "https://copilot.tencent.com:8443"]) {
+  let unsafeIssuerRejected = false;
+  try {
+    credentialDomain(WORKBUDDY_CN, cnJwt(issuer));
+  } catch {
+    unsafeIssuerRejected = true;
+  }
+  assert(unsafeIssuerRejected, `unsafe CN issuer was accepted: ${issuer}`);
+}
+
+const cnLoginRequests: Array<{ url: string; init?: RequestInit }> = [];
+const cnLogin = await loginWorkBuddy(WORKBUDDY_CN, {
+  onAuth() {},
+  async onPrompt() { return ""; },
+}, async (input, init) => {
+  const url = String(input);
+  cnLoginRequests.push({ url, init });
+  if (url.includes("/auth/state")) {
+    return Response.json({
+      code: 0,
+      data: { state: "cn-state", authUrl: "https://www.workbuddy.cn/login?platform=workbuddy" },
+    });
+  }
+  if (url.includes("/auth/token?")) {
+    return Response.json({
+      code: 0,
+      data: {
+        accessToken: cnJwt("https://copilot.tencent.com"),
+        refreshToken: "refresh-cn",
+        expiresIn: 3600,
+        domain: "copilot.tencent.com",
+      },
+    });
+  }
+  assert(url.endsWith("/v2/plugin/account"), `CN login called an unexpected endpoint: ${url}`);
+  const headers = new Headers(init?.headers);
+  assert(headers.get("authorization")?.startsWith("Bearer "), "CN account finalize omitted bearer auth");
+  assert(headers.get("x-domain") === "copilot.tencent.com", "CN account finalize omitted verified domain");
+  return Response.json({ code: 0, data: { uid: "account-cn" } });
+}, () => 1_000);
+assert(
+  cnLogin.accountId === "account-cn"
+    && cnLogin.orgId === undefined
+    && cnLoginRequests.length === 3,
+  "CN login persisted before durable account finalize",
+);
+
+let missingCnUidRejected = false;
+try {
+  await loginWorkBuddy(WORKBUDDY_CN, {
+    onAuth() {},
+    async onPrompt() { return ""; },
+  }, async (input) => {
+    const url = String(input);
+    if (url.includes("/auth/state")) {
+      return Response.json({ code: 0, data: { state: "cn-state", authUrl: "https://copilot.tencent.com/login" } });
+    }
+    if (url.includes("/auth/token?")) {
+      return Response.json({
+        code: 0,
+        data: {
+          accessToken: cnJwt("https://copilot.tencent.com"),
+          refreshToken: "refresh-cn",
+          expiresIn: 3600,
+          domain: "copilot.tencent.com",
+        },
+      });
+    }
+    return Response.json({ code: 0, data: {} });
+  }, () => 1_000);
+} catch {
+  missingCnUidRejected = true;
+}
+assert(missingCnUidRejected, "CN login accepted a token bundle without finalized account uid");
+
+let cnRefreshRequest: RequestInit | undefined;
+const cnPrevious: OAuthCredentials = {
+  access: cnJwt("https://copilot.tencent.com"),
+  refresh: "refresh-cn",
+  expires: 1,
+  accountId: "account-cn",
+};
+const cnRefreshed = await refreshWorkBuddyOAuth(WORKBUDDY_CN, cnPrevious, async (_input, init) => {
+  cnRefreshRequest = init;
+  return Response.json({
+    code: 0,
+    data: {
+      accessToken: cnJwt("https://copilot.tencent.com"),
+      refreshToken: "refresh-cn-2",
+      expiresIn: 3600,
+      domain: "copilot.tencent.com",
+    },
+  });
+}, 2_000);
+assert(cnRefreshed.accountId === "account-cn", "CN refresh lost finalized durable uid");
+assert(
+  new Headers(cnRefreshRequest?.headers).get("x-domain") === "copilot.tencent.com"
+    && cnRefreshRequest?.body === "{}",
+  "CN refresh did not use its reconstructed domain and empty JSON body",
+);
+
+let changedCnDomainRejected = false;
+try {
+  await refreshWorkBuddyOAuth(WORKBUDDY_CN, cnPrevious, async () => Response.json({
+    code: 0,
+    data: {
+      accessToken: cnJwt("https://other.example"),
+      refreshToken: "refresh-cn-2",
+      expiresIn: 3600,
+      domain: "other.example",
+    },
+  }), 2_000);
+} catch {
+  changedCnDomainRejected = true;
+}
+assert(changedCnDomainRejected, "CN refresh accepted a changed credential domain");
 
 const refreshAbort = new AbortController();
 const hangingRefresh: typeof fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {

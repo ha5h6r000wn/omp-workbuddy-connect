@@ -123,6 +123,10 @@ export class WorkBuddyUiController {
       this.invalidate(`${this.site.label} account switched`);
     }
     this.#accountKey = nextAccountKey;
+    if (!this.site.usage.enabled) {
+      this.#credits = { kind: "unavailable" };
+      return this.#render(ctx, account, options);
+    }
     const generation = ++this.#stateGeneration;
     this.#abort.abort(`${this.site.label} UI superseded`);
     this.#abort = new AbortController();
@@ -135,10 +139,10 @@ export class WorkBuddyUiController {
     let nextCredits: CreditsState;
     try {
       if (options.forceRefresh) {
-        await ctx.modelRegistry.authStorage.invalidateUsageCache(this.site.usage.providerId, signal);
+        await ctx.modelRegistry.authStorage.invalidateUsageCache(this.site.providerId, signal);
       }
       const reports = await ctx.modelRegistry.authStorage.fetchUsageReports({ signal });
-      const report = reports?.find((candidate) => candidate.provider === this.site.usage.providerId
+      const report = reports?.find((candidate) => candidate.provider === this.site.providerId
         && candidate.limits.every((limit) => !limit.scope.accountId || limit.scope.accountId === account.accountId));
       const credits = report ? summarizeWorkBuddyUsage(this.site, report) : undefined;
       nextCredits = report && credits ? { kind: "available", report, credits } : { kind: "unavailable" };

@@ -1,8 +1,14 @@
 import type { AuthStorage, Model, OAuthCredentials, UsageCredential } from "@oh-my-pi/pi-ai";
 import type { ExtensionContext, ProviderConfig } from "@oh-my-pi/pi-coding-agent";
-import { loginWorkBuddy, refreshWorkBuddyOAuth, validateRequestCredential, validateStoredCredential } from "./auth.ts";
+import {
+  credentialDomain,
+  loginWorkBuddy,
+  refreshWorkBuddyOAuth,
+  validateRequestCredential,
+  validateStoredCredential,
+} from "./auth.ts";
 import { createWorkBuddyUsageProvider } from "./credits.ts";
-import { chatBaseUrl, fixedChatHeaders, type SiteDescriptor } from "./site.ts";
+import { chatBaseUrl, chatHeaders, type SiteDescriptor } from "./site.ts";
 
 type StoredAuth = Pick<AuthStorage, "listOAuthAccounts" | "remove">;
 type ProviderModels = NonNullable<ProviderConfig["models"]>;
@@ -63,6 +69,32 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
     transitioning: true,
     revision: 0,
   };
+  let domainBinding: {
+    readonly accountId: string;
+    readonly orgId?: string;
+    readonly domain: string;
+  } | undefined;
+
+  function bindCredentialDomain(credentials: OAuthCredentials): void {
+    if (site.domainPolicy.kind === "fixed") return;
+    domainBinding = {
+      accountId: credentials.accountId!,
+      ...(optionalIdentity(credentials.orgId) ? { orgId: optionalIdentity(credentials.orgId) } : {}),
+      domain: credentialDomain(site, credentials.access),
+    };
+  }
+
+  function boundDomain(account: { accountId: string; orgId?: string }): string | undefined {
+    if (site.domainPolicy.kind === "fixed") return undefined;
+    if (
+      !domainBinding
+      || domainBinding.accountId !== account.accountId
+      || optionalIdentity(domainBinding.orgId) !== optionalIdentity(account.orgId)
+    ) {
+      throw identityError(site, "credential domain is unavailable for the stored account");
+    }
+    return domainBinding.domain;
+  }
 
   function requireModelAccess(modelId: string, expectedRevision?: number): number {
     if (modelAccess.transitioning) {
@@ -93,6 +125,7 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
   function getApiKey(credentials: OAuthCredentials): string {
     validateRequestCredential(site, credentials);
     validateCredentialIdentity(site, requireBinding(), credentials);
+    bindCredentialDomain(credentials);
     return credentials.access;
   }
 
@@ -100,6 +133,7 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
     try {
       validateStoredCredential(site, credentials);
       if (binding) validateCredentialIdentity(site, binding, credentials);
+      bindCredentialDomain(credentials);
     } catch {
       return models.filter((model) => model.provider !== site.providerId);
     }
@@ -114,6 +148,7 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
           const requestSignal = combinedSignal(signal);
           const currentBinding = requireBinding();
           const selectedAccount = requireSingleStoredAccount(site, currentBinding);
+          const selectedDomain = boundDomain(selectedAccount);
           const preserved = await previous?.(requestSignal);
           requestSignal.throwIfAborted();
           requireModelAccess(model.id, accessRevision);
@@ -128,12 +163,17 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
           ) {
             throw identityError(site, "stored account changed during header resolution");
           }
+          if (site.domainPolicy.kind === "jwt-issuer" && boundDomain(currentAccount) !== selectedDomain) {
+            throw identityError(site, "credential domain changed during header resolution");
+          }
+          const orgId = optionalIdentity(selectedAccount.orgId);
           return {
             ...preserved,
             "X-User-Id": selectedAccount.accountId,
-            ...(selectedAccount.orgId
-              ? { "X-Enterprise-Id": selectedAccount.orgId }
+            ...(orgId
+              ? { "X-Enterprise-Id": orgId }
               : { "X-No-Enterprise-Id": "1" }),
+            ...(selectedDomain ? { "X-Domain": selectedDomain } : {}),
           };
         },
       };
@@ -173,7 +213,7 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
       return {
         baseUrl: chatBaseUrl(site),
         api: "openai-completions",
-        headers: fixedChatHeaders(site),
+        headers: chatHeaders(site),
         ...(usage ? { usage } : {}),
         oauth: {
           name: site.displayName,
@@ -206,6 +246,7 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
       try {
         await binding.authStorage.remove(site.providerId);
         authenticationEnabled = false;
+        domainBinding = undefined;
       } catch (error) {
         authenticationEnabled = wasEnabled;
         throw error;
@@ -214,6 +255,7 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
     shutdown() {
       authenticationEnabled = false;
       binding = undefined;
+      domainBinding = undefined;
       lifecycleAbort.abort(`${site.label} extension shutdown`);
       authenticationAbort.abort(`${site.label} extension shutdown`);
     },

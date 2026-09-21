@@ -6,7 +6,7 @@ import {
   WorkBuddyOAuthError,
   type WorkBuddyOAuthErrorKind,
 } from "../src/workbuddy-api.ts";
-import { WORKBUDDY_INTL } from "../src/site.ts";
+import { WORKBUDDY_CN, WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -33,18 +33,23 @@ async function expectCancelled(promise: Promise<unknown>): Promise<LoginCancelle
   throw new Error("expected cancellation rejection");
 }
 
-const CN_SITE = {
-  ...WORKBUDDY_INTL,
-  providerId: "workbuddy-cn",
-  label: "WorkBuddy CN",
-  commandName: "workbuddy-cn",
-};
+const CN_SITE = WORKBUDDY_CN;
+let cnRefreshInit: RequestInit | undefined;
 const realmError = await expectKind(
-  refreshPluginToken(CN_SITE, "refresh", undefined, async () => new Response(null, { status: 401 })),
+  refreshPluginToken(CN_SITE, "refresh", undefined, "copilot.tencent.com", async (_input, init) => {
+    cnRefreshInit = init;
+    return new Response(null, { status: 401 });
+  }),
   "token_refresh",
 );
+assert(cnRefreshInit?.body === "{}", "empty-json refresh policy did not send an empty JSON object");
 assert(
-  realmError.message.startsWith("WorkBuddy CN token refresh")
+  new Headers(cnRefreshInit?.headers).get("x-domain") === "copilot.tencent.com"
+    && new Headers(cnRefreshInit?.headers).get("x-auth-refresh-source") === "plugin",
+  "CN refresh lost its credential domain or realm-local source",
+);
+assert(
+  realmError.message.startsWith(`${WORKBUDDY_CN.label} token refresh`)
     && realmError.message.includes("/login workbuddy-cn"),
   `OAuth error leaked the international realm: ${realmError.message}`,
 );
@@ -202,10 +207,38 @@ const loginStartRateError = await expectKind(startPluginLogin(WORKBUDDY_INTL, as
 assert(loginStartRateError.status === 429 && calls === 1, "login-start rate limit was generically retried");
 
 calls = 0;
-const rateError = await expectKind(refreshPluginToken(WORKBUDDY_INTL, "refresh", "org", async () => {
+const rateError = await expectKind(refreshPluginToken(WORKBUDDY_INTL, "refresh", "org", undefined, async () => {
   calls += 1;
   return new Response(null, { status: 429 });
 }), "rate_limited");
 assert(rateError.status === 429 && calls === 1, "refresh rate limit was generically retried");
 
-console.log("OK: OAuth cancellation, timeout, rejection, network, 5xx, and Retry-After boundaries");
+let cnStartInput: RequestInfo | URL | undefined;
+let cnStartInit: RequestInit | undefined;
+const cnStart = await startPluginLogin(WORKBUDDY_CN, async (input, init) => {
+  cnStartInput = input;
+  cnStartInit = init;
+  return Response.json({
+    code: 0,
+    data: { state: "cn-state", authUrl: "https://www.workbuddy.cn/login?platform=workbuddy" },
+  });
+});
+const cnStartUrl = new URL(String(cnStartInput));
+assert(cnStart.state === "cn-state", "CN login state was lost");
+assert(
+  cnStartUrl.origin === "https://copilot.tencent.com"
+    && cnStartUrl.pathname === "/v2/plugin/auth/state"
+    && cnStartUrl.searchParams.get("platform") === "workbuddy"
+    && !cnStartUrl.searchParams.has("nonce")
+    && cnStartInit?.body === "{}",
+  "CN login-start request diverged from M0 evidence",
+);
+const cnStartHeaders = new Headers(cnStartInit?.headers);
+assert(
+  cnStartHeaders.get("x-no-user-id") === "true"
+    && cnStartHeaders.get("x-no-enterprise-id") === "true",
+  "CN login-start used international no-identity marker values",
+);
+
+console.log("OK: OAuth cancellation, timeout, rejection, network, 5xx, Retry-After, and realm protocol boundaries");
+

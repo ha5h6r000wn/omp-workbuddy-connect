@@ -21,16 +21,18 @@
 - [x] 2.5 从入口提取每 realm 独立装配闭包并仅装配 `workbuddy`，验证 registry、credential authority、AbortController、scope、目录与 UI 状态均非全局共享，官方 OMP 可正常加载。
 - [x] 2.6 运行完整国际站 unit、真实类型 contract、官方 runtime integration 和 live OAuth/Chat/refresh/tools/Usage 冒烟；任何行为差异修复后再进入中国站接入。
 
-> M1 于 2026-09-21 验收：`npm run typecheck` 零错误，`npm test` 的 19 个永久回归脚本全部通过；官方 OMP 18.2.7 直接加载当前源码后完成脱敏的国际站 OAuth、Hy3 Chat、真实 Read tool、强制 refresh 后 Chat 与 Usage Widget 冒烟，随后通过 Provider 命令清除隔离凭据。运行未记录 Token、Authorization、OAuth state 或完整账号标识。
+> M1 于 2026-09-21 验收：`npm run typecheck` 零错误，`npm test` 的 19 个永久回归脚本全部通过；官方 OMP 18.2.7 直接加载当前源码后完成脱敏的国际站 OAuth、Hy3 Chat、真实 Read tool、强制 refresh 后 Chat 与 Usage Widget 冒烟，随后通过 Provider 命令清除隔离凭据。运行未记录 Token、Authorization、OAuth state 或完整账号标识。Canonical evidence：[`m1-evidence.md`](./m1-evidence.md)。
 
 ## 3. M2 — 接入证据支持的中国站 realm
 
-- [ ] 3.1 只使用 M0 的已观察值和显式未知状态创建非生产 `workbuddy-cn` descriptor；对 descriptor 做快照/契约检查，证明 endpoint candidate、headers、pending/status 和兼容 flags 均可追溯到证据，未复制未验证国际站值，且任何待 3.2/3.6 复核的字段不能被误标为 production-approved。
-- [ ] 3.2 接入中国站 OAuth、refresh、request-bound identity 和单账号限制，使用独立 AuthStorage namespace；token success 后必须以 `/v2/plugin/account` finalize durable uid，再交付宿主 credential。证明 token-derived `domain` 可通过宿主语义匹配的持久字段在 restart 后恢复，或以只记录 claim keys/相等性的脱敏 probe 验证 `hostname(jwt.iss) === token-domain` 后再允许确定性 reconstruction；禁止把该等式预设为事实，禁止插件 sidecar credential 与无证据字段挪用。以受控故障覆盖拒绝、超时、429/Retry-After 和取消，以隔离 OMP 覆盖 credential 持久化、restart、logout、双站并发登录/刷新、缺身份/domain fail-closed 与 A→B，且任一站均不读写另一站 credential。
-- [ ] 3.3 接入中国站模型目录、能力、free/all 和 provider+model 预算覆盖；分离 catalog eligibility 与代表模型 release validation，以 realm-bound `creditsRaw` 和 `freeEvidence`（explicit-zero/non-zero/unknown）表达原始价格证据。验证缓存缺失/损坏且无 builtin 时返回 unavailable/empty，同 ID 模型仍保持各自 endpoint、metadata、价格证据、scope 和 retained-model 阻断。
-- [ ] 3.4 注册 `/workbuddy-cn` 的 status/free/all/logout 与 Provider 专属 settings、Widget key、标签和 generation；验证双站命令、turn/session lifecycle 和迟到异步结果不会互相清理或恢复状态。
-- [ ] 3.5 按 M0 决定处理中国站 Usage：未获批准时不注册 UsageProvider，并验证 `/workbuddy-cn` 显示 credits/plan unavailable 且 Billing 请求数为零；获批准时用中国站真实协议完成独立成功/失败/慢响应回归。
-- [ ] 3.6 在生产入口装配 `workbuddy-cn` 前，以脱敏 OMP 出站记录复核隔离探针观察到的 Chat 完整 URL/header，并保持单一 request hook 按 `ctx.model.provider` 精确分派；用官方 OMP 加载、混合目录和相同 model ID 场景验证两个 realm 与第三方 Provider 无串扰。URL/header 复核或 3.2 身份前置条件未通过时不得生产注册。
+- [x] 3.1 只使用 M0 的已观察值和显式未知状态创建非生产 `workbuddy-cn` descriptor；对 descriptor 做快照/契约检查，证明 endpoint candidate、headers、pending/status 和兼容 flags 均可追溯到证据，未复制未验证国际站值，且任何待 3.2/3.6 复核的字段不能被误标为 production-approved。
+- [x] 3.2 接入中国站 OAuth、refresh、request-bound identity 和单账号限制，使用独立 AuthStorage namespace；token success 后必须以 `/v2/plugin/account` finalize durable uid，再交付宿主 credential。证明 token-derived `domain` 可通过宿主语义匹配的持久字段在 restart 后恢复，或以只记录 claim keys/相等性的脱敏 probe 验证 `hostname(jwt.iss) === token-domain` 后再允许确定性 reconstruction；禁止把该等式预设为事实，禁止插件 sidecar credential 与无证据字段挪用。以受控故障覆盖拒绝、超时、429/Retry-After 和取消，以隔离 OMP 覆盖 credential 持久化、restart、logout、双站并发登录/刷新、缺身份/domain fail-closed 与 A→B，且任一站均不读写另一站 credential。
+- [x] 3.3 接入中国站模型目录、能力、free/all 和 provider+model 预算覆盖；分离 catalog eligibility 与代表模型 release validation，以 realm-bound `creditsRaw` 和 `freeEvidence`（explicit-zero/non-zero/unknown）表达原始价格证据。验证缓存缺失/损坏且无 builtin 时返回 unavailable/empty，同 ID 模型仍保持各自 endpoint、metadata、价格证据、scope 和 retained-model 阻断。
+- [x] 3.4 注册 `/workbuddy-cn` 的 status/free/all/logout 与 Provider 专属 settings、Widget key、标签和 generation；验证双站命令、turn/session lifecycle 和迟到异步结果不会互相清理或恢复状态。
+- [x] 3.5 按 M0 决定处理中国站 Usage：未获批准时不注册 UsageProvider，并验证 `/workbuddy-cn` 显示 credits/plan unavailable 且 Billing 请求数为零；获批准时用中国站真实协议完成独立成功/失败/慢响应回归。
+- [x] 3.6 在生产入口装配 `workbuddy-cn` 前，以脱敏 OMP 出站记录复核隔离探针观察到的 Chat 完整 URL/header，并保持单一 request hook 按 `ctx.model.provider` 精确分派；用官方 OMP 加载、混合目录和相同 model ID 场景验证两个 realm 与第三方 Provider 无串扰。URL/header 复核或 3.2 身份前置条件未通过时不得生产注册。
+
+> M2 于 2026-09-21 验收：真实中国站 OAuth 完成 `/v2/plugin/account` finalize，脱敏 probe 验证 `hostname(jwt.iss) === token-domain`，restart/forced refresh 后 Chat 通过；官方 OMP 最终出站记录确认 `https://copilot.tencent.com/v2/chat/completions` 与 realm headers。双 realm concurrent refresh/Chat、scoped logout、目录/Usage/payload 隔离及 19 个永久回归脚本通过。Canonical evidence：[`m2-evidence.md`](./m2-evidence.md)。
 
 ## 4. M3 — 双 realm 验收与发布
 

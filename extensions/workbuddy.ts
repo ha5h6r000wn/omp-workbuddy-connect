@@ -1,4 +1,4 @@
-// WorkBuddy AI international provider for OMP.
+// WorkBuddy international and China providers for OMP.
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { createWorkBuddyProvider } from "../src/provider.ts";
 import {
@@ -12,7 +12,7 @@ import {
   type ProviderPayload,
 } from "../src/payload.ts";
 import { loadSettings, saveSettings } from "../src/settings.ts";
-import { WORKBUDDY_INTL, type SiteDescriptor } from "../src/site.ts";
+import { WORKBUDDY_CN, WORKBUDDY_INTL, type SiteDescriptor } from "../src/site.ts";
 import { WorkBuddyUiController } from "../src/ui.ts";
 
 interface RealmRuntime {
@@ -20,7 +20,7 @@ interface RealmRuntime {
   transformPayload(payload: unknown): ProviderPayload | undefined;
 }
 
-function installRealm(pi: ExtensionAPI, site: SiteDescriptor): RealmRuntime {
+export function installRealm(pi: ExtensionAPI, site: SiteDescriptor): RealmRuntime {
   const provider = createWorkBuddyProvider(site);
   let scope = loadSettings(site).scope;
   let catalog = loadProductConfig(site);
@@ -187,16 +187,21 @@ function installRealm(pi: ExtensionAPI, site: SiteDescriptor): RealmRuntime {
   return {
     site,
     transformPayload(payload) {
+      if (!site.payload.normalizeNamedToolChoice) return undefined;
       const parsed = asProviderPayload(payload);
-      if (!parsed) return undefined;
-      return site.payload.normalizeNamedToolChoice ? normalizeNamedToolChoice(parsed) : parsed;
+      return parsed ? normalizeNamedToolChoice(parsed) : undefined;
     },
   };
 }
 
 export default async function (pi: ExtensionAPI) {
-  const realm = installRealm(pi, WORKBUDDY_INTL);
-  const realmByProvider: Readonly<Record<string, RealmRuntime>> = { [realm.site.providerId]: realm };
+  const realms = [
+    installRealm(pi, WORKBUDDY_INTL),
+    installRealm(pi, WORKBUDDY_CN),
+  ];
+  const realmByProvider: Readonly<Record<string, RealmRuntime>> = Object.fromEntries(
+    realms.map((realm) => [realm.site.providerId, realm]),
+  );
 
   pi.on("before_provider_request", (event, ctx) => {
     const selected = ctx.model ? realmByProvider[ctx.model.provider] : undefined;

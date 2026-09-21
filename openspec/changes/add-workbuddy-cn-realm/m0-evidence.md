@@ -88,7 +88,7 @@ M0 1.1 的版本、类型、永久测试与当前真实国际站 smoke 均已复
 ### 4.1 与当前国际站实现的已知不同点
 
 - endpoint：国际站 `https://www.workbuddy.ai/v2`；中国站官方产品 endpoint 为 `https://copilot.tencent.com`，auth 组合为 `/v2/plugin/...`。
-- platform：国际站 `workbuddy-ai`；中国站 `workbuddy`。
+- platform：中国站官方 Desktop/CLI 产品配置为 `workbuddy`；国际站官方 Desktop 产品配置为 `workbuddy-ai`；当前 OMP 国际站 Plugin Auth 合同独立使用并已真实验证 `CLI`。Desktop product platform 与 OMP Plugin OAuth platform 不可互相替换。
 - refresh source：当前扩展国际站发送 `X-Auth-Refresh-Source: workbuddy`；中国站官方 CLI 发送 `plugin`。
 - polling：当前扩展国际站实现为 2 秒、15 分钟；中国站官方 CLI 静态实现为 1 秒、5 分钟。
 - Login Web domain：中国站运行时使用 `www.workbuddy.cn`；不能把它当作 API base。

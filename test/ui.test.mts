@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuthStorage } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { WORKBUDDY_INTL } from "../src/site.ts";
+import { WORKBUDDY_CN, WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -154,6 +154,44 @@ try {
   resolveSnapshotReports(undefined);
   await snapshotRefresh;
   assert(snapshotAccountReads === 2, `one refresh should read OAuth accounts twice; observed ${snapshotAccountReads}`);
+  const disabledSite = WORKBUDDY_CN;
+  let disabledUsageCalls = 0;
+  const disabledCtx = {
+    ...ctx,
+    model: { provider: "workbuddy-cn", id: "cn-model" },
+    modelRegistry: {
+      authStorage: {
+        listOAuthAccounts() {
+          return [snapshotAccount];
+        },
+        async invalidateUsageCache() {
+          disabledUsageCalls += 1;
+        },
+        async fetchUsageReports() {
+          disabledUsageCalls += 1;
+          return [];
+        },
+      },
+    },
+  };
+  const disabledController = new WorkBuddyUiController(disabledSite, () => ({
+    scope: "all",
+    models: [],
+    source: "desktop-cache",
+    transitioning: false,
+  }));
+  const disabledLines = await disabledController.refresh(disabledCtx, {
+    forceRefresh: true,
+    showWhenInactive: true,
+    showWidget: true,
+  });
+  assert(disabledUsageCalls === 0, "disabled realm triggered aggregate Usage or Billing work");
+  assert(
+    disabledLines?.some((line) => line === "积分  不可用")
+      && disabledLines.some((line) => line === "套餐  不可用"),
+    "disabled realm did not render Usage as unavailable",
+  );
+
 
   const startResult = await sessionStart({}, ctx);
   assert(startResult === undefined, "session_start returned an unexpected value");
