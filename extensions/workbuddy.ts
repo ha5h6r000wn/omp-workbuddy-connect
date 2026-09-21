@@ -1,9 +1,6 @@
 // WorkBuddy AI international provider for OMP.
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import {
-  createWorkBuddyProvider,
-  WORKBUDDY_PROVIDER,
-} from "../src/provider.ts";
+import { createWorkBuddyProvider } from "../src/provider.ts";
 import {
   buildOmpModels,
   loadProductConfig,
@@ -12,20 +9,27 @@ import {
 import {
   asProviderPayload,
   normalizeNamedToolChoice,
+  type ProviderPayload,
 } from "../src/payload.ts";
 import { loadSettings, saveSettings } from "../src/settings.ts";
+import { WORKBUDDY_INTL, type SiteDescriptor } from "../src/site.ts";
 import { WorkBuddyUiController } from "../src/ui.ts";
 
-export default async function (pi: ExtensionAPI) {
-  const provider = createWorkBuddyProvider();
-  let scope = loadSettings().scope;
-  let catalog = loadProductConfig();
-  let models = buildOmpModels(catalog, scope);
+interface RealmRuntime {
+  readonly site: SiteDescriptor;
+  transformPayload(payload: unknown): ProviderPayload | undefined;
+}
+
+function installRealm(pi: ExtensionAPI, site: SiteDescriptor): RealmRuntime {
+  const provider = createWorkBuddyProvider(site);
+  let scope = loadSettings(site).scope;
+  let catalog = loadProductConfig(site);
+  let models = buildOmpModels(site, catalog, scope);
   let activeIds = new Set(models.map((model) => model.id));
   let transitioning = false;
   provider.setModelAccess(activeIds, transitioning);
 
-  const ui = new WorkBuddyUiController(() => ({
+  const ui = new WorkBuddyUiController(site, () => ({
     scope,
     models,
     source: catalog.source,
@@ -35,8 +39,8 @@ export default async function (pi: ExtensionAPI) {
 
   function installProvider(nextModels: typeof models): void {
     // OMP ignores an empty static overlay, so unregister only to clear that case.
-    if (nextModels.length === 0) pi.unregisterProvider(WORKBUDDY_PROVIDER);
-    pi.registerProvider(WORKBUDDY_PROVIDER, provider.config(nextModels));
+    if (nextModels.length === 0) pi.unregisterProvider(site.providerId);
+    pi.registerProvider(site.providerId, provider.config(nextModels));
   }
 
   function throwAfterRollback(previousModels: typeof models, original: unknown): never {
@@ -45,7 +49,7 @@ export default async function (pi: ExtensionAPI) {
     } catch (rollbackError) {
       throw new AggregateError(
         [original, rollbackError],
-        "WorkBuddy model scope update failed and the previous provider could not be restored",
+        `${site.displayName} model scope update failed and the previous provider could not be restored`,
       );
     }
     throw original;
@@ -65,15 +69,15 @@ export default async function (pi: ExtensionAPI) {
   }
 
   async function switchScope(nextScope: Scope, ctx: ExtensionContext): Promise<void> {
-    if (transitioning) throw new Error("WorkBuddy model scope update is already in progress");
+    if (transitioning) throw new Error(`${site.displayName} model scope update is already in progress`);
 
-    const nextCatalog = loadProductConfig();
-    const nextModels = buildOmpModels(nextCatalog, nextScope);
+    const nextCatalog = loadProductConfig(site);
+    const nextModels = buildOmpModels(site, nextCatalog, nextScope);
     const nextActiveIds = new Set(nextModels.map((model) => model.id));
     const previousModels = models;
     transitioning = true;
     provider.setModelAccess(activeIds, transitioning);
-    ui.clear(ctx, "WorkBuddy model scope changed");
+    ui.clear(ctx, `${site.displayName} model scope changed`);
     try {
       try {
         installProvider(nextModels);
@@ -81,7 +85,7 @@ export default async function (pi: ExtensionAPI) {
         throwAfterRollback(previousModels, error);
       }
       try {
-        await saveSettings(nextScope);
+        await saveSettings(site, nextScope);
       } catch (error) {
         throwAfterRollback(previousModels, error);
       }
@@ -91,13 +95,13 @@ export default async function (pi: ExtensionAPI) {
       models = nextModels;
       activeIds = nextActiveIds;
       if (
-        ctx.model?.provider === WORKBUDDY_PROVIDER
+        ctx.model?.provider === site.providerId
         && typeof ctx.model.id === "string"
         && !activeIds.has(ctx.model.id)
       ) {
         notify(
           ctx,
-          `当前模型 ${ctx.model.id} 已不在 WorkBuddy ${scope} 范围内，请重新选择模型`,
+          `当前模型 ${ctx.model.id} 已不在 ${site.label} ${scope} 范围内，请重新选择模型`,
           "warning",
         );
       }
@@ -112,40 +116,33 @@ export default async function (pi: ExtensionAPI) {
       await switchScope(nextScope, ctx);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      notify(ctx, `WorkBuddy 模型范围切换失败：${message}`, "error");
+      notify(ctx, `${site.label} 模型范围切换失败：${message}`, "error");
       return;
     }
-    notify(ctx, `WorkBuddy 模型范围已切换为 ${nextScope}`, "info");
+    notify(ctx, `${site.label} 模型范围已切换为 ${nextScope}`, "info");
   }
 
   async function logout(ctx: ExtensionContext): Promise<void> {
-    ui.invalidate("WorkBuddy logout");
+    ui.invalidate(`${site.displayName} logout`);
     try {
       await provider.logout();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      notify(ctx, `WorkBuddy 退出失败：${message}`, "error");
+      notify(ctx, `${site.label} 退出失败：${message}`, "error");
       return;
     }
 
-    ui.clear(ctx, "WorkBuddy logout complete");
+    ui.clear(ctx, `${site.displayName} logout complete`);
     try {
       installProvider(models);
-      notify(ctx, "WorkBuddy 已断开登录", "info");
+      notify(ctx, `${site.label} 已断开登录`, "info");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      notify(ctx, `WorkBuddy 已断开登录，但 Provider 状态刷新失败：${message}`, "warning");
+      notify(ctx, `${site.label} 已断开登录，但 Provider 状态刷新失败：${message}`, "warning");
     }
   }
 
   installProvider(models);
-
-  pi.on("before_provider_request", (event, ctx) => {
-    if (ctx.model?.provider !== WORKBUDDY_PROVIDER) return;
-    const payload = asProviderPayload(event.payload);
-    if (!payload) return;
-    return normalizeNamedToolChoice(payload);
-  });
 
   pi.on("session_start", (_event, ctx) => {
     provider.bindContext(ctx);
@@ -167,8 +164,8 @@ export default async function (pi: ExtensionAPI) {
     ui.syncTurn(ctx);
   });
 
-  pi.registerCommand("workbuddy", {
-    description: "按需显示 WorkBuddy 状态；可切换 free/all 范围或 logout",
+  pi.registerCommand(site.commandName, {
+    description: `按需显示 ${site.label} 状态；可切换 free/all 范围或 logout`,
     handler: async (args, ctx) => {
       const command = String(args ?? "").trim().toLowerCase();
       if (command === "free" || command === "all") {
@@ -180,11 +177,29 @@ export default async function (pi: ExtensionAPI) {
         return;
       }
       if (command !== "") {
-        notify(ctx, `未知 WorkBuddy 命令：${command}；可用命令为 free、all、logout`, "warning");
+        notify(ctx, `未知 ${site.label} 命令：${command}；可用命令为 free、all、logout`, "warning");
         return;
       }
       await ui.refresh(ctx, { forceRefresh: true, showWhenInactive: true, showWidget: true });
     },
   });
+
+  return {
+    site,
+    transformPayload(payload) {
+      const parsed = asProviderPayload(payload);
+      if (!parsed) return undefined;
+      return site.payload.normalizeNamedToolChoice ? normalizeNamedToolChoice(parsed) : parsed;
+    },
+  };
 }
 
+export default async function (pi: ExtensionAPI) {
+  const realm = installRealm(pi, WORKBUDDY_INTL);
+  const realmByProvider: Readonly<Record<string, RealmRuntime>> = { [realm.site.providerId]: realm };
+
+  pi.on("before_provider_request", (event, ctx) => {
+    const selected = ctx.model ? realmByProvider[ctx.model.provider] : undefined;
+    return selected?.transformPayload(event.payload);
+  });
+}

@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ProviderModelConfig } from "@oh-my-pi/pi-coding-agent";
+import type { SiteDescriptor } from "./site.ts";
 
-const PRODUCT_CONFIG_ENV = "WORKBUDDYAI_PRODUCT_CONFIG";
 const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as const;
 // Only verified WorkBuddy wire facts belong here; generic OpenAI compatibility stays host-owned.
 const COMPAT = {
@@ -55,46 +55,11 @@ export interface ProductConfig {
   fallbackReason?: ProductConfigFallbackReason;
 }
 
-// Gateway evidence: larger requests to this model enter a reasoning loop.
-export const FLASH_MAX_TOKENS = 16_384;
 
-const BUILTIN_MODELS: ProductModel[] = [
-  {
-    id: "deepseek-v4.1-flash",
-    name: "Deepseek-V4.1-Flash",
-    contextWindow: 1_000_000,
-    maxTokens: 128_000,
-    supportsImages: true,
-    supportsReasoning: true,
-    supportedEfforts: ["low", "medium", "high", "xhigh", "max"],
-    canDisableThinking: false,
-  },
-  {
-    id: "hy4-preview-f",
-    name: "Hy4 preview",
-    contextWindow: 1_000_000,
-    maxTokens: 64_000,
-    supportsImages: true,
-    supportsReasoning: true,
-    supportedEfforts: ["high"],
-    canDisableThinking: false,
-  },
-  {
-    id: "hy3",
-    name: "Hy3",
-    contextWindow: 192_000,
-    maxTokens: 64_000,
-    supportsImages: true,
-    supportsReasoning: true,
-    supportedEfforts: ["low", "high"],
-    canDisableThinking: false,
-  },
-];
-
-function productConfigPath(): string {
-  const override = process.env[PRODUCT_CONFIG_ENV]?.trim();
+function productConfigPath(site: SiteDescriptor): string {
+  const override = process.env[site.catalog.env]?.trim();
   if (override) return override;
-  return join(homedir(), ".workbuddy-ai", "cache", "acc-product-config-v3.json");
+  return join(homedir(), ...site.catalog.pathSegments);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -234,13 +199,14 @@ export function parseProductConfig(text: string): ProductConfig | undefined {
 }
 
 function builtinFallback(
+  site: SiteDescriptor,
   fallbackReason: ProductConfigFallbackReason,
   diagnostics: ModelDiagnostic[] = [],
 ): ProductConfig {
-  return { source: "builtin-fallback", fallbackReason, models: BUILTIN_MODELS, diagnostics };
+  return { source: "builtin-fallback", fallbackReason, models: [...site.catalog.builtin], diagnostics };
 }
 
-export function loadProductConfig(path = productConfigPath()): ProductConfig {
+export function loadProductConfig(site: SiteDescriptor, path = productConfigPath(site)): ProductConfig {
   let text: string;
   try {
     text = readFileSync(path, "utf8");
@@ -248,13 +214,13 @@ export function loadProductConfig(path = productConfigPath()): ProductConfig {
     const code = typeof error === "object" && error !== null && "code" in error
       ? error.code
       : undefined;
-    return builtinFallback(code === "ENOENT" ? "missing" : "unreadable");
+    return builtinFallback(site, code === "ENOENT" ? "missing" : "unreadable");
   }
 
   const parsed = parseProductDocument(text);
-  if ("fallbackReason" in parsed) return builtinFallback(parsed.fallbackReason);
+  if ("fallbackReason" in parsed) return builtinFallback(site, parsed.fallbackReason);
   if (parsed.declaredModelCount > 0 && parsed.config.models.length === 0) {
-    return builtinFallback("no-valid-models", parsed.config.diagnostics);
+    return builtinFallback(site, "no-valid-models", parsed.config.diagnostics);
   }
   return parsed.config;
 }
@@ -264,11 +230,12 @@ export function freeModelIds(config: ProductConfig): readonly string[] {
   return config.models.filter((model) => creditsAreFree(model.credits)).map((model) => model.id);
 }
 
-export function clampModelMaxTokens(modelId: string, maxTokens: number): number {
-  return modelId === "deepseek-v4.1-flash" ? Math.min(maxTokens, FLASH_MAX_TOKENS) : maxTokens;
+export function modelMaxTokens(site: SiteDescriptor, modelId: string, maxTokens: number): number {
+  const override = site.modelOverrides[modelId]?.maxTokens;
+  return override === undefined ? maxTokens : Math.min(maxTokens, override);
 }
 
-export function buildOmpModels(config: ProductConfig, scope: ModelScope): ProviderModelConfig[] {
+export function buildOmpModels(site: SiteDescriptor, config: ProductConfig, scope: ModelScope): ProviderModelConfig[] {
   const free = new Set(freeModelIds(config));
   return config.models
     .filter((model) => scope === "all" || free.has(model.id))
@@ -297,7 +264,7 @@ export function buildOmpModels(config: ProductConfig, scope: ModelScope): Provid
         input: model.supportsImages ? ["text", "image"] : ["text"],
         cost: ZERO_COST,
         contextWindow: model.contextWindow,
-        maxTokens: clampModelMaxTokens(model.id, model.maxTokens),
+        maxTokens: modelMaxTokens(site, model.id, model.maxTokens),
         compat: {
           ...COMPAT,
           ...(model.supportsImages ? { stripImageInput: false } : {}),

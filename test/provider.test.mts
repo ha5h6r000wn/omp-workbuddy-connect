@@ -1,12 +1,33 @@
 import type { Model, OAuthCredentials } from "@oh-my-pi/pi-ai";
 import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import {
-  createWorkBuddyProvider,
-  WORKBUDDY_FIXED_HEADERS,
-} from "../src/provider.ts";
+import { createWorkBuddyProvider } from "../src/provider.ts";
+import { WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+assert(Object.isFrozen(WORKBUDDY_INTL), "site descriptor root is mutable");
+assert(Object.isFrozen(WORKBUDDY_INTL.auth), "site auth descriptor is mutable");
+assert(Object.isFrozen(WORKBUDDY_INTL.auth.headers), "site auth headers are mutable");
+assert(Object.isFrozen(WORKBUDDY_INTL.catalog.builtin), "site builtin catalog is mutable");
+assert(Object.isFrozen(WORKBUDDY_INTL.modelOverrides), "site model overrides are mutable");
+assert(Object.isFrozen(WORKBUDDY_INTL.modelOverrides["deepseek-v4.1-flash"]), "site model override is mutable");
+assert(Object.isFrozen(WORKBUDDY_INTL.usage), "site usage descriptor is mutable");
+assert(
+  WORKBUDDY_INTL.providerId === "workbuddy"
+    && WORKBUDDY_INTL.label === "WorkBuddy"
+    && WORKBUDDY_INTL.chatPath === "/v2/chat/completions"
+    && WORKBUDDY_INTL.auth.platform === "CLI"
+    && WORKBUDDY_INTL.auth.nonceMode === "query-and-body"
+    && WORKBUDDY_INTL.auth.pollIntervalMs === 2_000
+    && WORKBUDDY_INTL.auth.pollDeadlineMs === 15 * 60 * 1000
+    && WORKBUDDY_INTL.auth.refreshSource === "workbuddy"
+    && WORKBUDDY_INTL.domainPolicy.kind === "fixed",
+  "international descriptor changed its frozen protocol contract",
+);
+for (const forbidden of ["credential", "scope", "generation", "registry", "session"]) {
+  assert(!Object.hasOwn(WORKBUDDY_INTL, forbidden), `site descriptor captured mutable ${forbidden} state`);
 }
 
 const credentials: OAuthCredentials = {
@@ -39,7 +60,7 @@ const authStorage = {
     return undefined;
   },
 };
-const controller = createWorkBuddyProvider();
+const controller = createWorkBuddyProvider(WORKBUDDY_INTL);
 controller.setModelAccess(new Set(["hy3"]), false);
 const config = controller.config([]);
 assert(config.baseUrl === "https://www.workbuddy.ai/v2", "provider routing was not fixed to international API");
@@ -48,7 +69,7 @@ assert(config.headers?.Origin === "https://www.workbuddy.ai", "missing fixed Ori
 assert(config.headers?.Referer === "https://www.workbuddy.ai/", "missing fixed Referer");
 assert(config.headers?.["X-Domain"] === "www.workbuddy.ai", "missing fixed X-Domain");
 assert(config.headers?.["X-Product"] === "SaaS", "missing fixed X-Product");
-assert(!Object.keys(WORKBUDDY_FIXED_HEADERS).some((name) => name.toLowerCase() === "authorization"), "plugin injected Chat Authorization");
+assert(!Object.keys(config.headers ?? {}).some((name) => name.toLowerCase() === "authorization"), "plugin injected Chat Authorization");
 const oauth = config.oauth;
 assert(oauth?.getApiKey && oauth.modifyModels, "provider OAuth boundaries are incomplete");
 
@@ -175,7 +196,7 @@ assert(
   "retained resolver captured the projection-time binding",
 );
 
-const childController = createWorkBuddyProvider();
+const childController = createWorkBuddyProvider(WORKBUDDY_INTL);
 childController.setModelAccess(new Set(["hy3"]), false);
 childController.bindContext({
   modelRegistry: { authStorage },
@@ -238,7 +259,7 @@ const activeStillOne = oauth.modifyModels([workbuddy], credentials);
 assert(activeStillOne.length === 1, "active sticky marker was incorrectly counted as another account");
 
 const noOrgCredentials = { ...credentials, orgId: undefined };
-accounts = [{ position: 0, credentialId: 11, accountId: "account-a", active: true }];
+accounts = [{ position: 0, credentialId: 11, accountId: "account-a", orgId: "", active: true }];
 assert(oauth.modifyModels([foreignOpenAI, workbuddy], noOrgCredentials).length === 2, "optional enterprise identity hid WorkBuddy model");
 assert(oauth.getApiKey(noOrgCredentials) === "access-a", "getApiKey rejected optional enterprise identity");
 const noOrgModel = oauth.modifyModels([workbuddy], noOrgCredentials)[0];
@@ -258,7 +279,7 @@ assert(getOAuthAccessCalls === 0, "provider header resolution called AuthStorage
 
 
 let shutdownFetchStarted = false;
-const shutdownController = createWorkBuddyProvider(async (_input, init) => {
+const shutdownController = createWorkBuddyProvider(WORKBUDDY_INTL, async (_input, init) => {
   shutdownFetchStarted = true;
   return new Promise<Response>((_resolve, reject) => {
     const signal = init?.signal;

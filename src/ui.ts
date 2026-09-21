@@ -2,7 +2,7 @@ import type { OAuthAccountSummary, UsageReport } from "@oh-my-pi/pi-ai";
 import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { summarizeWorkBuddyUsage, type WorkBuddyCredits } from "./credits.ts";
 import type { ModelScope, ProductConfigFallbackReason, ProductConfigSource } from "./models.ts";
-import { WORKBUDDY_PROVIDER } from "./provider.ts";
+import type { SiteDescriptor } from "./site.ts";
 
 const FALLBACK_REASON_LABELS: Record<ProductConfigFallbackReason, string> = {
   missing: "缓存不存在",
@@ -56,7 +56,10 @@ export class WorkBuddyUiController {
   #activeSessionId: string | undefined;
   #accountKey: string | undefined;
 
-  constructor(private readonly currentView: () => WorkBuddyUiView) {}
+  constructor(
+    private readonly site: SiteDescriptor,
+    private readonly currentView: () => WorkBuddyUiView,
+  ) {}
 
   invalidate(reason: string): void {
     this.#stateGeneration += 1;
@@ -66,7 +69,7 @@ export class WorkBuddyUiController {
   }
 
   beginSession(ctx: ExtensionContext): void {
-    this.invalidate("WorkBuddy session initialized");
+    this.invalidate(`${this.site.label} session initialized`);
     this.#activeSessionId = ctx.sessionManager.getSessionId();
     this.#invalidateOnAccountChange(ctx);
     if (!ctx.hasUI) return;
@@ -76,7 +79,7 @@ export class WorkBuddyUiController {
 
   syncTurn(ctx: ExtensionContext): void {
     this.#invalidateOnAccountChange(ctx);
-    this.invalidate("WorkBuddy detail dismissed on next turn");
+    this.invalidate(`${this.site.label} detail dismissed on next turn`);
     if (!ctx.hasUI) return;
     this.#safeWidget(ctx, undefined);
     this.#safeStatus(ctx, undefined);
@@ -90,7 +93,7 @@ export class WorkBuddyUiController {
   }
 
   shutdown(): void {
-    this.invalidate("WorkBuddy session shutdown");
+    this.invalidate(`${this.site.label} session shutdown`);
     this.#activeSessionId = undefined;
     this.#accountKey = undefined;
   }
@@ -98,30 +101,30 @@ export class WorkBuddyUiController {
   async refresh(ctx: ExtensionContext, options: RefreshOptions = {}): Promise<string[] | undefined> {
     if (!ctx.hasUI) return undefined;
     const view = this.currentView();
-    const show = options.showWhenInactive || ctx.model?.provider === WORKBUDDY_PROVIDER;
+    const show = options.showWhenInactive || ctx.model?.provider === this.site.providerId;
     if (!show) {
-      this.clear(ctx, "WorkBuddy model inactive");
+      this.clear(ctx, `${this.site.label} model inactive`);
       return undefined;
     }
 
     const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(
-      WORKBUDDY_PROVIDER,
+      this.site.providerId,
       ctx.sessionManager.getSessionId(),
     );
     const account = accounts.length === 1 && accounts[0]?.accountId ? accounts[0] : undefined;
     if (!account) {
-      this.invalidate("WorkBuddy account unavailable");
+      this.invalidate(`${this.site.label} account unavailable`);
       this.#credits = { kind: "unavailable" };
       return this.#render(ctx, undefined, options);
     }
 
     const nextAccountKey = accountKey(account);
     if (this.#accountKey !== undefined && this.#accountKey !== nextAccountKey) {
-      this.invalidate("WorkBuddy account switched");
+      this.invalidate(`${this.site.label} account switched`);
     }
     this.#accountKey = nextAccountKey;
     const generation = ++this.#stateGeneration;
-    this.#abort.abort("WorkBuddy UI superseded");
+    this.#abort.abort(`${this.site.label} UI superseded`);
     this.#abort = new AbortController();
     const signal = this.#abort.signal;
     const sessionId = ctx.sessionManager.getSessionId();
@@ -132,12 +135,12 @@ export class WorkBuddyUiController {
     let nextCredits: CreditsState;
     try {
       if (options.forceRefresh) {
-        await ctx.modelRegistry.authStorage.invalidateUsageCache(WORKBUDDY_PROVIDER, signal);
+        await ctx.modelRegistry.authStorage.invalidateUsageCache(this.site.usage.providerId, signal);
       }
       const reports = await ctx.modelRegistry.authStorage.fetchUsageReports({ signal });
-      const report = reports?.find((candidate) => candidate.provider === WORKBUDDY_PROVIDER
+      const report = reports?.find((candidate) => candidate.provider === this.site.usage.providerId
         && candidate.limits.every((limit) => !limit.scope.accountId || limit.scope.accountId === account.accountId));
-      const credits = report ? summarizeWorkBuddyUsage(report) : undefined;
+      const credits = report ? summarizeWorkBuddyUsage(this.site, report) : undefined;
       nextCredits = report && credits ? { kind: "available", report, credits } : { kind: "unavailable" };
     } catch {
       nextCredits = { kind: "unavailable" };
@@ -149,11 +152,11 @@ export class WorkBuddyUiController {
 
   #invalidateOnAccountChange(ctx: ExtensionContext): void {
     const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(
-      WORKBUDDY_PROVIDER,
+      this.site.providerId,
       ctx.sessionManager.getSessionId(),
     );
     const nextKey = accounts.length === 1 && accounts[0]?.accountId ? accountKey(accounts[0]) : undefined;
-    if (this.#accountKey !== undefined && this.#accountKey !== nextKey) this.invalidate("WorkBuddy account switched");
+    if (this.#accountKey !== undefined && this.#accountKey !== nextKey) this.invalidate(`${this.site.label} account switched`);
     this.#accountKey = nextKey;
   }
 
@@ -167,9 +170,9 @@ export class WorkBuddyUiController {
   ): boolean {
     if (generation !== this.#stateGeneration || this.#abort.signal.aborted || !ctx.hasUI) return false;
     if (this.#activeSessionId !== sessionId || ctx.sessionManager.getSessionId() !== sessionId) return false;
-    if (!showWhenInactive && ctx.model?.provider !== WORKBUDDY_PROVIDER) return false;
+    if (!showWhenInactive && ctx.model?.provider !== this.site.providerId) return false;
     if (this.currentView().scope !== scope) return false;
-    const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(WORKBUDDY_PROVIDER, sessionId);
+    const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(this.site.providerId, sessionId);
     return accounts.length === 1 && accounts[0]?.accountId !== undefined && accountKey(accounts[0]) === expectedAccountKey;
   }
 
@@ -181,7 +184,7 @@ export class WorkBuddyUiController {
     if (hiddenModelCount > 0) visibleNames.push(`… +${hiddenModelCount}`);
     const names = visibleNames.join(" | ");
     const lines = [
-      "WorkBuddy AI · 国际版",
+      this.site.uiTitle,
       `账号  ${redactIdentity(account?.email || account?.accountId)}`,
       `范围  ${view.scope} · ${view.models.length} 模型 · ${source}`,
       `模型  ${names || "（当前范围为空）"}`,
@@ -230,8 +233,8 @@ export class WorkBuddyUiController {
     this.#safeStatus(ctx, undefined);
     if (options.notify) {
       const message = this.#credits.kind === "available"
-        ? `WorkBuddy 状态已更新 · 积分 ${this.#credits.credits.totalRemaining}`
-        : "WorkBuddy 状态已更新 · 积分不可用";
+        ? `${this.site.label} 状态已更新 · 积分 ${this.#credits.credits.totalRemaining}`
+        : `${this.site.label} 状态已更新 · 积分不可用`;
       this.#safeNotify(ctx, message, this.#credits.kind === "available" ? "info" : "warning");
     }
     return lines;
@@ -239,7 +242,7 @@ export class WorkBuddyUiController {
 
   #safeWidget(ctx: ExtensionContext, content: string[] | undefined): void {
     try {
-      ctx.ui.setWidget("workbuddy", content);
+      ctx.ui.setWidget(this.site.widgetKey, content);
     } catch {
       // Optional UI failures never enter the Chat plane.
     }
@@ -247,7 +250,7 @@ export class WorkBuddyUiController {
 
   #safeStatus(ctx: ExtensionContext, text: string | undefined): void {
     try {
-      ctx.ui.setStatus("workbuddy", text);
+      ctx.ui.setStatus(this.site.widgetKey, text);
     } catch {
       // Optional UI failures never enter the Chat plane.
     }

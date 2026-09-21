@@ -5,8 +5,8 @@ import type {
   UsageReport,
 } from "@oh-my-pi/pi-ai";
 import { fetchWorkBuddyBillingEnvelope } from "./workbuddy-api.ts";
+import type { SiteDescriptor } from "./site.ts";
 
-export const WORKBUDDY_USAGE_PROVIDER = "workbuddy";
 
 export interface WorkBuddyCreditPack {
   id: string;
@@ -92,13 +92,13 @@ export function parseWorkBuddyCredits(envelope: unknown): WorkBuddyCredits | und
   };
 }
 
-function usageLimit(pack: WorkBuddyCreditPack, credential: UsageCredential): UsageLimit {
+function usageLimit(site: SiteDescriptor, pack: WorkBuddyCreditPack, credential: UsageCredential): UsageLimit {
   const fraction = pack.limit && pack.limit > 0 ? pack.remaining / pack.limit : undefined;
   return {
     id: pack.id,
     label: pack.name,
     scope: {
-      provider: WORKBUDDY_USAGE_PROVIDER,
+      provider: site.usage.providerId,
       accountId: credential.accountId,
       orgId: credential.orgId,
       tier: pack.name,
@@ -113,8 +113,8 @@ function usageLimit(pack: WorkBuddyCreditPack, credential: UsageCredential): Usa
   };
 }
 
-export function summarizeWorkBuddyUsage(report: UsageReport): WorkBuddyCredits | undefined {
-  if (report.provider !== WORKBUDDY_USAGE_PROVIDER) return undefined;
+export function summarizeWorkBuddyUsage(site: SiteDescriptor, report: UsageReport): WorkBuddyCredits | undefined {
+  if (report.provider !== site.usage.providerId) return undefined;
   const metadata = report.metadata;
   const totalRemaining = finiteNumber(metadata?.totalRemaining);
   const totalLimit = finiteNumber(metadata?.totalLimit);
@@ -151,27 +151,30 @@ export function summarizeWorkBuddyUsage(report: UsageReport): WorkBuddyCredits |
   return { totalRemaining, ...(totalLimit !== undefined ? { totalLimit } : {}), plans, packs };
 }
 
-export function createWorkBuddyUsageProvider(validateCredential: CredentialGuard): UsageProvider {
+export function createWorkBuddyUsageProvider(
+  site: SiteDescriptor,
+  validateCredential: CredentialGuard,
+): UsageProvider {
   return {
-    id: WORKBUDDY_USAGE_PROVIDER,
+    id: site.usage.providerId,
     retainLastGoodOnFailure: false,
     validatesCredentials: false,
-    supports: ({ provider, credential }) => provider === WORKBUDDY_USAGE_PROVIDER
+    supports: ({ provider, credential }) => provider === site.usage.providerId
       && credential.type === "oauth"
       && Boolean(credential.accessToken && credential.accountId),
     async fetchUsage(params, ctx): Promise<UsageReport | null> {
-      if (params.provider !== WORKBUDDY_USAGE_PROVIDER || params.credential.type !== "oauth") return null;
+      if (params.provider !== site.usage.providerId || params.credential.type !== "oauth") return null;
       try {
         validateCredential(params.credential);
-        const envelope = await fetchWorkBuddyBillingEnvelope(params.credential, ctx.fetch, params.signal);
+        const envelope = await fetchWorkBuddyBillingEnvelope(site, params.credential, ctx.fetch, params.signal);
         const credits = parseWorkBuddyCredits(envelope);
         if (!credits) return null;
         return {
-          provider: WORKBUDDY_USAGE_PROVIDER,
+          provider: site.usage.providerId,
           fetchedAt: Date.now(),
-          limits: credits.packs.map((pack) => usageLimit(pack, params.credential)),
+          limits: credits.packs.map((pack) => usageLimit(site, pack, params.credential)),
           metadata: {
-            source: "workbuddy-billing",
+            source: site.usage.source,
             accountId: params.credential.accountId,
             ...(params.credential.orgId ? { orgId: params.credential.orgId } : {}),
             totalRemaining: credits.totalRemaining,
@@ -180,8 +183,8 @@ export function createWorkBuddyUsageProvider(validateCredential: CredentialGuard
           },
         };
       } catch (error) {
-        ctx.logger?.warn("WorkBuddy usage request unavailable", {
-          provider: WORKBUDDY_USAGE_PROVIDER,
+        ctx.logger?.warn(`${site.label} usage request unavailable`, {
+          provider: site.usage.providerId,
           error: error instanceof Error ? error.name : "unknown",
         });
         return null;

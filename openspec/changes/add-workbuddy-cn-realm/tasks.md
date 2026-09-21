@@ -14,12 +14,14 @@
 
 ## 2. M1 — 用最小 realm 描述符迁移国际站
 
-- [ ] 2.1 增加只读 `SiteDescriptor` 及国际站常量，只包含现有真实差异字段；通过类型检查和 descriptor 单元契约验证无可变 credential/session 状态或通用框架层。
-- [ ] 2.2 让 OAuth/refresh/Chat header 生成显式接收 descriptor，表达 start request shape/nonce policy、poll timing、refresh source、fixed/credential-derived domain policy 与 identity finalize；覆盖 `X-Auth-Refresh-Source`、Plugin Auth headers 和 pending/status 判定，对照现有 fixture 验证国际站每个出站 URL/header/错误分类不变。保留当前 OMP 下串行账号替换的已知支持边界，不虚构 request-attempt 原子性。
-- [ ] 2.3 让模型构建、缓存读取、token clamp 与 payload policy 以 provider 为第一键，删除全部裸 `modelId` 全局 workaround；国际站 `deepseek-v4.1-flash` 16k clamp 及其他兼容只进入 Intl descriptor/policy。用相同 model ID 的 CN/第三方 Provider 回归证明请求不被修改。
-- [ ] 2.4 将 settings、Usage report/filter/summary、Widget key、标签和 state generation 改为 realm 参数，同时保持旧国际站文件、命令和 UI 语义；保留 `02d0937` 的 account snapshot + stale guard 模式，并确保两个 realm 各自在独立 controller/closure 中读取、校验和渲染自身 snapshot。验证重启、Billing 失败和迟到结果测试不变。
-- [ ] 2.5 从入口提取每 realm 独立装配闭包并仅装配 `workbuddy`，验证 registry、credential authority、AbortController、scope、目录与 UI 状态均非全局共享，官方 OMP 可正常加载。
-- [ ] 2.6 运行完整国际站 unit、真实类型 contract、官方 runtime integration 和 live OAuth/Chat/refresh/tools/Usage 冒烟；任何行为差异修复后再进入中国站接入。
+- [x] 2.1 增加只读 `SiteDescriptor` 及国际站常量，只包含现有真实差异字段；通过类型检查和 descriptor 单元契约验证无可变 credential/session 状态或通用框架层。
+- [x] 2.2 让 OAuth/refresh/Chat header 生成显式接收 descriptor，表达 start request shape/nonce policy、poll timing、refresh source、fixed/credential-derived domain policy 与 identity finalize；覆盖 `X-Auth-Refresh-Source`、Plugin Auth headers 和 pending/status 判定，对照现有 fixture 验证国际站每个出站 URL/header/错误分类不变。保留当前 OMP 下串行账号替换的已知支持边界，不虚构 request-attempt 原子性。
+- [x] 2.3 让模型构建、缓存读取、token clamp 与 payload policy 以 provider 为第一键，删除全部裸 `modelId` 全局 workaround；国际站 `deepseek-v4.1-flash` 16k clamp 及其他兼容只进入 Intl descriptor/policy。用相同 model ID 的 CN/第三方 Provider 回归证明请求不被修改。
+- [x] 2.4 将 settings、Usage report/filter/summary、Widget key、标签和 state generation 改为 realm 参数，同时保持旧国际站文件、命令和 UI 语义；保留 `02d0937` 的 account snapshot + stale guard 模式，并确保两个 realm 各自在独立 controller/closure 中读取、校验和渲染自身 snapshot。验证重启、Billing 失败和迟到结果测试不变。
+- [x] 2.5 从入口提取每 realm 独立装配闭包并仅装配 `workbuddy`，验证 registry、credential authority、AbortController、scope、目录与 UI 状态均非全局共享，官方 OMP 可正常加载。
+- [x] 2.6 运行完整国际站 unit、真实类型 contract、官方 runtime integration 和 live OAuth/Chat/refresh/tools/Usage 冒烟；任何行为差异修复后再进入中国站接入。
+
+> M1 于 2026-09-21 验收：`npm run typecheck` 零错误，`npm test` 的 19 个永久回归脚本全部通过；官方 OMP 18.2.7 直接加载当前源码后完成脱敏的国际站 OAuth、Hy3 Chat、真实 Read tool、强制 refresh 后 Chat 与 Usage Widget 冒烟，随后通过 Provider 命令清除隔离凭据。运行未记录 Token、Authorization、OAuth state 或完整账号标识。
 
 ## 3. M2 — 接入证据支持的中国站 realm
 

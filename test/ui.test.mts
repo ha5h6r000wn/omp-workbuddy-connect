@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuthStorage } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
+import { WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -140,7 +141,7 @@ try {
     },
   };
   const { WorkBuddyUiController } = await import("../src/ui.ts");
-  const snapshotController = new WorkBuddyUiController(() => ({
+  const snapshotController = new WorkBuddyUiController(WORKBUDDY_INTL, () => ({
     scope: "all",
     models: [],
     source: "desktop-cache",

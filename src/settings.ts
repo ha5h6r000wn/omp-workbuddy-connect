@@ -4,18 +4,19 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import type { ModelScope } from "./models.ts";
+import type { SiteDescriptor } from "./site.ts";
 
 export interface WorkBuddySettings {
   scope: ModelScope;
 }
 
-export function workBuddySettingsPath(agentDir = getAgentDir()): string {
-  return join(agentDir, ".workbuddy-settings.json");
+export function workBuddySettingsPath(site: SiteDescriptor, agentDir = getAgentDir()): string {
+  return join(agentDir, site.settingsFile);
 }
 
-export function loadSettings(agentDir = getAgentDir()): WorkBuddySettings {
+export function loadSettings(site: SiteDescriptor, agentDir = getAgentDir()): WorkBuddySettings {
   try {
-    const value: unknown = JSON.parse(readFileSync(workBuddySettingsPath(agentDir), "utf8"));
+    const value: unknown = JSON.parse(readFileSync(workBuddySettingsPath(site, agentDir), "utf8"));
     if (typeof value === "object" && value !== null && "scope" in value && value.scope === "all") {
       return { scope: "all" };
     }
@@ -23,10 +24,15 @@ export function loadSettings(agentDir = getAgentDir()): WorkBuddySettings {
   return { scope: "free" };
 }
 
-export async function saveSettings(scope: ModelScope, agentDir = getAgentDir()): Promise<void> {
+export async function saveSettings(
+  site: SiteDescriptor,
+  scope: ModelScope,
+  agentDir = getAgentDir(),
+): Promise<void> {
   await mkdir(agentDir, { recursive: true, mode: 0o700 });
-  const path = workBuddySettingsPath(agentDir);
-  const temporaryPath = join(agentDir, `.workbuddy-settings.${process.pid}.${randomUUID()}.tmp`);
+  const path = workBuddySettingsPath(site, agentDir);
+  const stem = site.settingsFile.endsWith(".json") ? site.settingsFile.slice(0, -5) : site.settingsFile;
+  const temporaryPath = join(agentDir, `${stem}.${process.pid}.${randomUUID()}.tmp`);
   try {
     const temporary = await open(temporaryPath, "wx", 0o600);
     try {

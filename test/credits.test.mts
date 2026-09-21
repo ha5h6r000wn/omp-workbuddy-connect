@@ -6,6 +6,7 @@ import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { createWorkBuddyProvider } from "../src/provider.ts";
 import { parseWorkBuddyCredits, summarizeWorkBuddyUsage } from "../src/credits.ts";
+import { WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -56,7 +57,7 @@ await authStorage.set("workbuddy", {
   accountId: "billing-account",
   orgId: "billing-org",
 });
-const controller = createWorkBuddyProvider();
+const controller = createWorkBuddyProvider(WORKBUDDY_INTL);
 controller.bindContext({
   modelRegistry: registry,
   sessionManager: { getSessionId: () => "credits-contract" },
@@ -85,7 +86,7 @@ try {
     code: 0,
     data: { Response: { Data: { Accounts: [] } } },
   }) === undefined, "empty package list was presented as genuine zero without live evidence");
-  assert(summarizeWorkBuddyUsage({
+  assert(summarizeWorkBuddyUsage(WORKBUDDY_INTL, {
     provider: "workbuddy",
     fetchedAt: Date.now(),
     limits: [],
@@ -114,7 +115,7 @@ try {
   await authStorage.invalidateUsageCache("workbuddy");
   reports = await authStorage.fetchUsageReports();
   assert(reports?.[0]?.metadata?.totalRemaining === 0, "genuine zero credits were not preserved");
-  const zeroSummary = summarizeWorkBuddyUsage(reports[0]!);
+  const zeroSummary = summarizeWorkBuddyUsage(WORKBUDDY_INTL, reports[0]!);
   assert(
     zeroSummary?.totalRemaining === 0
       && zeroSummary.totalLimit === 10

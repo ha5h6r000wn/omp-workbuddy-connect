@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { AuthStorage, streamSimple, type Context, type Model } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { buildOmpModels, parseProductConfig } from "../src/models.ts";
+import { WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -34,7 +35,7 @@ const config = parseProductConfig(JSON.stringify({
   ],
 }));
 assert(config, "integration product catalog did not parse");
-const models = buildOmpModels(config, "all");
+const models = buildOmpModels(WORKBUDDY_INTL, config, "all");
 const temp = await mkdtemp(join(tmpdir(), "workbuddy-model-contract-"));
 const authStorage = await AuthStorage.create(join(temp, "auth.db"));
 const registry = new ModelRegistry(authStorage, join(temp, "models.yml"), {

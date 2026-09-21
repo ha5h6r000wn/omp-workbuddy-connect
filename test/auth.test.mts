@@ -5,6 +5,7 @@ import {
   oauthFromWorkBuddy,
   refreshWorkBuddyOAuth,
 } from "../src/auth.ts";
+import { WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -21,13 +22,34 @@ function complete(overrides: Record<string, unknown> = {}): Record<string, unkno
   };
 }
 
+const CN_SITE = {
+  ...WORKBUDDY_INTL,
+  providerId: "workbuddy-cn",
+  label: "WorkBuddy CN",
+  commandName: "workbuddy-cn",
+};
+
+let realmMessage = "";
+try {
+  credentialFromLoginResponse(CN_SITE, complete({ accessToken: undefined }), 1_000);
+} catch (error) {
+  realmMessage = error instanceof Error ? error.message : "";
+}
+assert(
+  realmMessage.startsWith("workbuddy-cn credential")
+    && realmMessage.includes("/login workbuddy-cn")
+    && !realmMessage.includes("/login workbuddy again"),
+  `credential error leaked the international realm: ${realmMessage}`,
+);
+
+
 const required = ["accessToken", "refreshToken", "expiresIn", "uid"] as const;
 for (const field of required) {
   const data = complete();
   delete data[field];
   let rejected = false;
   try {
-    credentialFromLoginResponse(data, 1_000);
+    credentialFromLoginResponse(WORKBUDDY_INTL, data, 1_000);
   } catch {
     rejected = true;
   }
@@ -35,12 +57,12 @@ for (const field of required) {
 }
 
 const jwtAccess = `x.${Buffer.from(JSON.stringify({ sub: "jwt-account-a" })).toString("base64url")}.y`;
-const jwtIdentity = credentialFromLoginResponse(complete({
+const jwtIdentity = credentialFromLoginResponse(WORKBUDDY_INTL, complete({
   accessToken: jwtAccess,
   uid: undefined,
 }), 1_000);
 assert(jwtIdentity.uid === "jwt-account-a", "access-token JWT sub was not accepted as durable uid");
-const liveShape = oauthFromWorkBuddy(credentialFromLoginResponse(complete({
+const liveShape = oauthFromWorkBuddy(credentialFromLoginResponse(WORKBUDDY_INTL, complete({
   accessToken: jwtAccess,
   uid: undefined,
   enterpriseId: undefined,
@@ -52,7 +74,7 @@ const jwtEnterpriseAccess = `x.${Buffer.from(JSON.stringify({
   enterpriseId: "unproven-jwt-org",
   enterprise_id: "unproven-jwt-org-snake",
 })).toString("base64url")}.y`;
-const jwtEnterpriseIdentity = credentialFromLoginResponse(complete({
+const jwtEnterpriseIdentity = credentialFromLoginResponse(WORKBUDDY_INTL, complete({
   accessToken: jwtEnterpriseAccess,
   uid: undefined,
   enterpriseId: undefined,
@@ -62,7 +84,7 @@ assert(jwtEnterpriseIdentity.enterpriseId === undefined, "unproven JWT enterpris
 
 let emailClaimRejected = false;
 try {
-  credentialFromLoginResponse(complete({
+  credentialFromLoginResponse(WORKBUDDY_INTL, complete({
     accessToken: `x.${Buffer.from(JSON.stringify({ email: "display@example.com" })).toString("base64url")}.y`,
     uid: undefined,
   }), 1_000);
@@ -74,14 +96,14 @@ assert(emailClaimRejected, "email-only access-token claim was treated as durable
 for (const expiresIn of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
   let rejected = false;
   try {
-    credentialFromLoginResponse(complete({ expiresIn }), 1_000);
+    credentialFromLoginResponse(WORKBUDDY_INTL, complete({ expiresIn }), 1_000);
   } catch (error) {
     rejected = error instanceof Error && error.message.includes("expiry");
   }
   assert(rejected, `invalid expiresIn ${expiresIn} was accepted`);
 }
 
-const mapped = oauthFromWorkBuddy(credentialFromLoginResponse(complete({
+const mapped = oauthFromWorkBuddy(credentialFromLoginResponse(WORKBUDDY_INTL, complete({
   email: "real@example.com",
   nickname: "Display Name",
   domain: "attacker.invalid",
@@ -92,9 +114,9 @@ assert(mapped.accountId === "account-a" && mapped.orgId === "org-a", "identity w
 assert(mapped.email === "real@example.com", "explicit email was not preserved");
 assert(!("nickname" in mapped) && !("domain" in mapped), "display/routing data polluted OAuth identity");
 
-const nicknameOnly = oauthFromWorkBuddy(credentialFromLoginResponse(complete({ nickname: "looks@example.com" }), 1_000));
+const nicknameOnly = oauthFromWorkBuddy(credentialFromLoginResponse(WORKBUDDY_INTL, complete({ nickname: "looks@example.com" }), 1_000));
 assert(nicknameOnly.email === undefined, "nickname was aliased to email");
-const malformedEmail = oauthFromWorkBuddy(credentialFromLoginResponse(complete({ email: "not-an-email" }), 1_000));
+const malformedEmail = oauthFromWorkBuddy(credentialFromLoginResponse(WORKBUDDY_INTL, complete({ email: "not-an-email" }), 1_000));
 assert(malformedEmail.email === undefined, "malformed email was persisted");
 
 const previous: OAuthCredentials = {
@@ -119,7 +141,7 @@ const successfulRefresh: typeof fetch = async (_input, init) => {
     },
   });
 };
-const refreshed = await refreshWorkBuddyOAuth(previous, successfulRefresh, 10_000);
+const refreshed = await refreshWorkBuddyOAuth(WORKBUDDY_INTL, previous, successfulRefresh, 10_000);
 assert(refreshed.access === "access-a2" && refreshed.refresh === "refresh-a2", "refresh tokens were not replaced");
 assert(refreshed.expires === 7_210_000, "refresh expiry was not replaced");
 assert(refreshed.accountId === previous.accountId && refreshed.orgId === previous.orgId, "refresh lost identity");
@@ -135,7 +157,7 @@ const omittedRefreshFields: typeof fetch = async () => Response.json({
     expiresIn: 1800,
   },
 });
-const preserved = await refreshWorkBuddyOAuth(previous, omittedRefreshFields, 10_000);
+const preserved = await refreshWorkBuddyOAuth(WORKBUDDY_INTL, previous, omittedRefreshFields, 10_000);
 assert(preserved.refresh === previous.refresh, "omitted refresh token did not preserve the host credential");
 assert(
   preserved.accountId === previous.accountId && preserved.orgId === previous.orgId,
@@ -151,7 +173,7 @@ for (const responseData of [
   let rejected = false;
   const fetcher: typeof fetch = async () => Response.json({ code: 0, data: responseData });
   try {
-    await refreshWorkBuddyOAuth(previous, fetcher, 10_000);
+    await refreshWorkBuddyOAuth(WORKBUDDY_INTL, previous, fetcher, 10_000);
   } catch {
     rejected = true;
   }
@@ -160,7 +182,7 @@ for (const responseData of [
 
 let missingAccountRejected = false;
 try {
-  await refreshWorkBuddyOAuth({ ...previous, accountId: undefined }, successfulRefresh, 10_000);
+  await refreshWorkBuddyOAuth(WORKBUDDY_INTL, { ...previous, accountId: undefined }, successfulRefresh, 10_000);
 } catch {
   missingAccountRejected = true;
 }
@@ -171,7 +193,7 @@ const noEnterpriseRefresh: typeof fetch = async (_input, init) => {
   noEnterpriseRequest = init;
   return Response.json({ code: 0, data: { accessToken: "access-a4", expiresIn: 1800 } });
 };
-const noEnterprise = await refreshWorkBuddyOAuth({ ...previous, orgId: undefined }, noEnterpriseRefresh, 10_000);
+const noEnterprise = await refreshWorkBuddyOAuth(WORKBUDDY_INTL, { ...previous, orgId: undefined }, noEnterpriseRefresh, 10_000);
 assert(noEnterprise.orgId === undefined, "refresh fabricated an enterprise identity");
 const noEnterpriseHeaders = new Headers(noEnterpriseRequest?.headers);
 assert(noEnterpriseHeaders.get("x-enterprise-id") === null, "refresh sent a fabricated enterprise header");
@@ -190,7 +212,7 @@ const hangingRefresh: typeof fetch = async (_input, init) => new Promise<Respons
   }
   signal.addEventListener("abort", () => reject(signal.reason), { once: true });
 });
-const pendingRefresh = refreshWorkBuddyOAuth(previous, hangingRefresh, 10_000, refreshAbort.signal);
+const pendingRefresh = refreshWorkBuddyOAuth(WORKBUDDY_INTL, previous, hangingRefresh, 10_000, refreshAbort.signal);
 await Promise.resolve();
 refreshAbort.abort("host refresh cancelled");
 let refreshCancelled = false;

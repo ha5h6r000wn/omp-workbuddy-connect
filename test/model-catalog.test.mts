@@ -3,13 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   buildOmpModels,
-  clampModelMaxTokens,
   creditsAreFree,
-  FLASH_MAX_TOKENS,
   freeModelIds,
   loadProductConfig,
+  modelMaxTokens,
   parseProductConfig,
 } from "../src/models.ts";
+import { WORKBUDDY_INTL, type SiteDescriptor } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -67,7 +67,7 @@ assert(
   `invalid row diagnostics were incomplete: ${JSON.stringify(catalog.diagnostics)}`,
 );
 
-const all = buildOmpModels(catalog, "all");
+const all = buildOmpModels(WORKBUDDY_INTL, catalog, "all");
 assert(all.length === 3, "all scope did not preserve the valid cache catalog");
 const required = all.find((model) => model.id === "free-required");
 assert(required, "free reasoning model disappeared");
@@ -92,9 +92,9 @@ assert(unknownReasoning.thinking === undefined, "missing effort evidence default
 assert(creditsAreFree("x0.00") && creditsAreFree("0.0"), "explicit zero-credit evidence was rejected");
 assert(!creditsAreFree(undefined) && !creditsAreFree("x1.00"), "unknown or paid credits were treated as free");
 assert(freeModelIds(catalog).join(",") === "free-required", "free IDs did not use explicit cache evidence");
-assert(buildOmpModels(catalog, "free").map((model) => model.id).join(",") === "free-required", "free scope leaked paid or unknown models");
+assert(buildOmpModels(WORKBUDDY_INTL, catalog, "free").map((model) => model.id).join(",") === "free-required", "free scope leaked paid or unknown models");
 assert(unknownReasoning.cost.input === 0, "host cost placeholder changed");
-assert(!buildOmpModels(catalog, "free").some((model) => model.id === unknownReasoning.id), "zero cost placeholder became free evidence");
+assert(!buildOmpModels(WORKBUDDY_INTL, catalog, "free").some((model) => model.id === unknownReasoning.id), "zero cost placeholder became free evidence");
 
 const paidAndUnknown = parseProductConfig(JSON.stringify({
   models: [
@@ -103,35 +103,35 @@ const paidAndUnknown = parseProductConfig(JSON.stringify({
   ],
 }));
 assert(paidAndUnknown, "paid/unknown catalog was rejected");
-assert(buildOmpModels(paidAndUnknown, "free").length === 0, "empty free catalog was widened with fallbacks");
-assert(buildOmpModels(paidAndUnknown, "all").length === 2, "all scope did not mean the current cache catalog");
+assert(buildOmpModels(WORKBUDDY_INTL, paidAndUnknown, "free").length === 0, "empty free catalog was widened with fallbacks");
+assert(buildOmpModels(WORKBUDDY_INTL, paidAndUnknown, "all").length === 2, "all scope did not mean the current cache catalog");
 
 const temp = await mkdtemp(join(tmpdir(), "workbuddy-model-catalog-"));
 try {
-  const missing = loadProductConfig(join(temp, "missing.json"));
+  const missing = loadProductConfig(WORKBUDDY_INTL, join(temp, "missing.json"));
   assert(missing.source === "builtin-fallback", "missing cache did not select builtin fallback");
   assert(missing.fallbackReason === "missing", "missing cache reason was lost");
-  assert(buildOmpModels(missing, "free").length === 0, "builtin zero cost or stale credits claimed free status");
-  assert(buildOmpModels(missing, "all").length === 3, "builtin fallback catalog was unavailable in all scope");
+  assert(buildOmpModels(WORKBUDDY_INTL, missing, "free").length === 0, "builtin zero cost or stale credits claimed free status");
+  assert(buildOmpModels(WORKBUDDY_INTL, missing, "all").length === 3, "builtin fallback catalog was unavailable in all scope");
 
   const unreadablePath = join(temp, "cache-directory");
   await mkdir(unreadablePath);
-  const unreadable = loadProductConfig(unreadablePath);
+  const unreadable = loadProductConfig(WORKBUDDY_INTL, unreadablePath);
   assert(unreadable.source === "builtin-fallback" && unreadable.fallbackReason === "unreadable", "unreadable cache reason was lost");
 
   const invalidJsonPath = join(temp, "invalid-json.json");
   await writeFile(invalidJsonPath, "{");
-  const invalidJson = loadProductConfig(invalidJsonPath);
+  const invalidJson = loadProductConfig(WORKBUDDY_INTL, invalidJsonPath);
   assert(invalidJson.source === "builtin-fallback" && invalidJson.fallbackReason === "invalid-json", "invalid JSON cache reason was lost");
 
   const invalidSchemaPath = join(temp, "invalid-schema.json");
   await writeFile(invalidSchemaPath, JSON.stringify({ models: "not-an-array" }));
-  const invalidSchema = loadProductConfig(invalidSchemaPath);
+  const invalidSchema = loadProductConfig(WORKBUDDY_INTL, invalidSchemaPath);
   assert(invalidSchema.source === "builtin-fallback" && invalidSchema.fallbackReason === "invalid-schema", "invalid schema cache reason was lost");
 
   const noValidModelsPath = join(temp, "no-valid-models.json");
   await writeFile(noValidModelsPath, JSON.stringify({ models: [null, { id: "" }] }));
-  const noValidModels = loadProductConfig(noValidModelsPath);
+  const noValidModels = loadProductConfig(WORKBUDDY_INTL, noValidModelsPath);
   assert(
     noValidModels.source === "builtin-fallback" && noValidModels.fallbackReason === "no-valid-models",
     "non-empty cache without a valid model did not use its explicit fallback reason",
@@ -140,16 +140,25 @@ try {
 
   const emptyPath = join(temp, "empty.json");
   await writeFile(emptyPath, JSON.stringify({ models: [] }));
-  const empty = loadProductConfig(emptyPath);
+  const empty = loadProductConfig(WORKBUDDY_INTL, emptyPath);
   assert(empty.source === "desktop-cache", "valid empty cache was mislabeled as fallback");
   assert(empty.fallbackReason === undefined, "valid empty cache acquired a fallback reason");
-  assert(buildOmpModels(empty, "all").length === 0, "valid empty cache was widened with builtin models");
+  assert(buildOmpModels(WORKBUDDY_INTL, empty, "all").length === 0, "valid empty cache was widened with builtin models");
 } finally {
   await rm(temp, { recursive: true, force: true });
 }
 
-assert(clampModelMaxTokens("deepseek-v4.1-flash", 128_000) === FLASH_MAX_TOKENS, "catalog cap was not enforced");
-assert(clampModelMaxTokens("deepseek-v4.1-flash", 1_024) === 1_024, "small valid budget was raised");
-assert(clampModelMaxTokens("other", 128_000) === 128_000, "unrelated model budget was clamped");
+assert(modelMaxTokens(WORKBUDDY_INTL, "deepseek-v4.1-flash", 128_000) === 16_384, "catalog cap was not enforced");
+assert(modelMaxTokens(WORKBUDDY_INTL, "deepseek-v4.1-flash", 1_024) === 1_024, "small valid budget was raised");
+assert(modelMaxTokens(WORKBUDDY_INTL, "other", 128_000) === 128_000, "unrelated model budget was clamped");
+const unoverriddenRealm: SiteDescriptor = {
+  ...WORKBUDDY_INTL,
+  providerId: "workbuddy-cn",
+  modelOverrides: Object.freeze({}),
+};
+assert(
+  modelMaxTokens(unoverriddenRealm, "deepseek-v4.1-flash", 128_000) === 128_000,
+  "international model override leaked into another realm",
+);
 
 console.log("OK: model parsing, thinking, vision, budgets, and truthful free scope");

@@ -1,6 +1,7 @@
 import { chmod, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WORKBUDDY_INTL } from "../src/site.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -17,10 +18,10 @@ try {
   assert(getAgentDir() === temp, "OMP agent directory was not isolated");
   const settings = await import("../src/settings.ts");
   const path = join(temp, ".workbuddy-settings.json");
-  assert(settings.workBuddySettingsPath() === path, "settings did not honor OMP's public agent directory");
-  assert(settings.loadSettings().scope === "free", "missing settings did not use safe free scope");
+  assert(settings.workBuddySettingsPath(WORKBUDDY_INTL) === path, "settings did not honor OMP's public agent directory");
+  assert(settings.loadSettings(WORKBUDDY_INTL).scope === "free", "missing settings did not use safe free scope");
 
-  await settings.saveSettings("all");
+  await settings.saveSettings(WORKBUDDY_INTL, "all");
   const raw = await readFile(path, "utf8");
   const parsed: unknown = JSON.parse(raw);
   assert(typeof parsed === "object" && parsed !== null && "scope" in parsed && parsed.scope === "all", "saved scope was not readable");
@@ -31,7 +32,7 @@ try {
   let failedAtomically = false;
   await chmod(temp, 0o500);
   try {
-    await settings.saveSettings("free");
+    await settings.saveSettings(WORKBUDDY_INTL, "free");
   } catch {
     failedAtomically = true;
   } finally {
@@ -44,8 +45,8 @@ try {
     "failed atomic update left a temporary settings file",
   );
 
-  await settings.saveSettings("free");
-  assert(settings.loadSettings().scope === "free", "free scope did not survive restart load");
+  await settings.saveSettings(WORKBUDDY_INTL, "free");
+  assert(settings.loadSettings(WORKBUDDY_INTL).scope === "free", "free scope did not survive restart load");
   console.log("OK: settings use isolated OMP agent dir, replace atomically, persist scope only, and enforce 0600");
 } finally {
   if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
