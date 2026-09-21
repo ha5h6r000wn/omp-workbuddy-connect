@@ -249,7 +249,8 @@ export function buildOmpModels(site: SiteDescriptor, config: ProductConfig, scop
       const defaultLevel = model.defaultEffort as OmpThinking["defaultLevel"];
       return {
         id: model.id,
-        name: `${model.name} · ${model.credits ?? "x?"}`,
+        // A missing multiplier is unknown evidence, not a rate: show the bare model name.
+        name: model.credits ? `${model.name} · ${model.credits}` : model.name,
         reasoning: model.supportsReasoning,
         ...(hasCanonicalThinking
           ? {

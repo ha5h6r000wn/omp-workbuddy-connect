@@ -88,6 +88,9 @@ assert(optional.thinking.defaultLevel === undefined, "unsupported product defaul
 const unknownReasoning = all.find((model) => model.id === "unknown-reasoning");
 assert(unknownReasoning?.reasoning === true, "reasoning capability was dropped");
 assert(unknownReasoning.thinking === undefined, "missing effort evidence defaulted to every effort");
+assert(required.name === "Free Required · x0.00", `declared multiplier was not shown: ${required.name}`);
+assert(optional?.name === "paid-optional · x1.25", `unnamed model lost its multiplier: ${optional?.name}`);
+assert(unknownReasoning?.name === "unknown-reasoning", `unknown multiplier leaked a placeholder: ${unknownReasoning?.name}`);
 
 assert(creditsAreFree("x0.00") && creditsAreFree("0.0"), "explicit zero-credit evidence was rejected");
 assert(!creditsAreFree(undefined) && !creditsAreFree("x1.00"), "unknown or paid credits were treated as free");
@@ -106,13 +109,33 @@ assert(paidAndUnknown, "paid/unknown catalog was rejected");
 assert(buildOmpModels(WORKBUDDY_INTL, paidAndUnknown, "free").length === 0, "empty free catalog was widened with fallbacks");
 assert(buildOmpModels(WORKBUDDY_INTL, paidAndUnknown, "all").length === 2, "all scope did not mean the current cache catalog");
 
+const multiplierEvidence = parseProductConfig(JSON.stringify({
+  models: [
+    { id: "zero", name: "Zero", credits: "x0", maxInputTokens: 10, maxOutputTokens: 5 },
+    { id: "one", name: "One", credits: "x1", maxInputTokens: 10, maxOutputTokens: 5 },
+    { id: "unknown-multiplier", name: "Unknown", maxInputTokens: 10, maxOutputTokens: 5 },
+    { id: "blank-multiplier", name: "Blank", credits: "   ", maxInputTokens: 10, maxOutputTokens: 5 },
+  ],
+}));
+assert(multiplierEvidence, "multiplier evidence catalog was rejected");
+const namedModels = buildOmpModels(WORKBUDDY_INTL, multiplierEvidence, "all");
+assert(
+  namedModels.map((model) => model.name).join("|") === "Zero · x0|One · x1|Unknown|Blank",
+  `model names did not follow multiplier evidence: ${namedModels.map((model) => model.name).join("|")}`,
+);
+
 const temp = await mkdtemp(join(tmpdir(), "workbuddy-model-catalog-"));
 try {
   const missing = loadProductConfig(WORKBUDDY_INTL, join(temp, "missing.json"));
   assert(missing.source === "builtin-fallback", "missing cache did not select builtin fallback");
   assert(missing.fallbackReason === "missing", "missing cache reason was lost");
   assert(buildOmpModels(WORKBUDDY_INTL, missing, "free").length === 0, "builtin zero cost or stale credits claimed free status");
-  assert(buildOmpModels(WORKBUDDY_INTL, missing, "all").length === 3, "builtin fallback catalog was unavailable in all scope");
+  const fallbackModels = buildOmpModels(WORKBUDDY_INTL, missing, "all");
+  assert(fallbackModels.length === 3, "builtin fallback catalog was unavailable in all scope");
+  assert(
+    fallbackModels.map((model) => model.name).join("|") === "Deepseek-V4.1-Flash|Hy4 preview|Hy3",
+    `fallback models displayed an unproven multiplier: ${fallbackModels.map((model) => model.name).join("|")}`,
+  );
 
   const unreadablePath = join(temp, "cache-directory");
   await mkdir(unreadablePath);
@@ -161,4 +184,4 @@ assert(
   "international model override leaked into another realm",
 );
 
-console.log("OK: model parsing, thinking, vision, budgets, and truthful free scope");
+console.log("OK: model parsing, thinking, vision, budgets, truthful free scope, and multiplier display");

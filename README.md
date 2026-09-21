@@ -59,7 +59,7 @@ omp plugin uninstall omp-workbuddy-connect
 
 ## 模型与推理档
 
-默认 scope 为 `free`。只有有效 Desktop 产品目录中带明确零 multiplier credits 证据的模型会显示；`0`、`0.0`、`x0`、`x0.00` 等规范零值会归一为免费证据，非零、缺失或格式错误均不是免费。有效缓存（包括 `models: []`）是权威结果，不会被内置列表扩宽。内置清单仅作为整个目录不可用或无任何有效行时的 fallback，不构成免费证据，因此 fallback 来源的 `free` 可以为空。
+默认 scope 为 `free`。只有有效 Desktop 产品目录中带明确零 multiplier credits 证据的模型会显示；`0`、`0.0`、`x0`、`x0.00` 等规范零值会归一为免费证据，非零、缺失或格式错误均不是免费。有效缓存（包括 `models: []`）是权威结果，不会被内置列表扩宽。内置清单仅作为整个目录不可用或无任何有效行时的 fallback，不构成免费证据，因此 fallback 来源的 `free` 可以为空。模型名称只在产品目录确实提供 credits multiplier 时追加 ` · <multiplier>`；缺少该证据（例如内置 fallback）时只显示模型名，不显示占位倍率。
 
 每个模型的 reasoning、图片能力和推理档来自产品配置 `~/.workbuddy-ai/cache/acc-product-config-v3.json`。`/workbuddy` 详情显示精确来源 `desktop-cache` 或 `builtin-fallback`；fallback 同时显示缺失、不可读、JSON 无效、结构无效或无有效模型的原因。缓存不可用时，`all` scope 可使用当前内置目录：
 
@@ -99,7 +99,7 @@ npm test
 npm run typecheck
 ```
 
-`npm test` 顺序执行 19 个永久回归脚本，避免全局 fetch、AuthStorage 与 runtime fixture 并发互扰。真实 OAuth、Chat、Refresh、Vision、Tools、Credits、main、Task role 与 headless 的发布证据不由 Mock 替代，记录于 `docs/omp-port/release-evidence.md`。
+`npm test` 为 19 个永久回归脚本各启动独立 Bun 进程，因此全局 fetch、AuthStorage 与 runtime fixture 状态不会跨脚本互扰；脚本彼此独立，默认最多 8 个并发执行，`WORKBUDDY_TEST_CONCURRENCY=<n>` 可在内存充裕的机器上提高并发度；单个脚本超过 300 秒会被终止并计为失败，`WORKBUDDY_TEST_TIMEOUT_MS=<ms>` 可调整该上限，使挂起的脚本不会冻结整个套件。真实 OAuth、Chat、Refresh、Vision、Tools、Credits、main、Task role 与 headless 的发布证据不由 Mock 替代，记录于 `docs/omp-port/release-evidence.md`。
 
 ## 与上游的差异
 
