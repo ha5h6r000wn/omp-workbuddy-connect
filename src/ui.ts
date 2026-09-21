@@ -112,7 +112,7 @@ export class WorkBuddyUiController {
     if (!account) {
       this.invalidate("WorkBuddy account unavailable");
       this.#credits = { kind: "unavailable" };
-      return this.#render(ctx, options.notify, options.showWidget);
+      return this.#render(ctx, undefined, options);
     }
 
     const nextAccountKey = accountKey(account);
@@ -127,8 +127,9 @@ export class WorkBuddyUiController {
     const sessionId = ctx.sessionManager.getSessionId();
     const scope = view.scope;
     this.#credits = { kind: "loading" };
-    this.#render(ctx, false, options.showWidget);
+    this.#render(ctx, account, { showWidget: options.showWidget });
 
+    let nextCredits: CreditsState;
     try {
       if (options.forceRefresh) {
         await ctx.modelRegistry.authStorage.invalidateUsageCache(WORKBUDDY_PROVIDER, signal);
@@ -137,13 +138,13 @@ export class WorkBuddyUiController {
       const report = reports?.find((candidate) => candidate.provider === WORKBUDDY_PROVIDER
         && candidate.limits.every((limit) => !limit.scope.accountId || limit.scope.accountId === account.accountId));
       const credits = report ? summarizeWorkBuddyUsage(report) : undefined;
-      if (!this.#isCurrent(ctx, generation, sessionId, scope, nextAccountKey, options.showWhenInactive)) return undefined;
-      this.#credits = report && credits ? { kind: "available", report, credits } : { kind: "unavailable" };
+      nextCredits = report && credits ? { kind: "available", report, credits } : { kind: "unavailable" };
     } catch {
-      if (!this.#isCurrent(ctx, generation, sessionId, scope, nextAccountKey, options.showWhenInactive)) return undefined;
-      this.#credits = { kind: "unavailable" };
+      nextCredits = { kind: "unavailable" };
     }
-    return this.#render(ctx, options.notify, options.showWidget);
+    if (!this.#isCurrent(ctx, generation, sessionId, scope, nextAccountKey, options.showWhenInactive)) return undefined;
+    this.#credits = nextCredits;
+    return this.#render(ctx, account, options);
   }
 
   #invalidateOnAccountChange(ctx: ExtensionContext): void {
@@ -172,13 +173,8 @@ export class WorkBuddyUiController {
     return accounts.length === 1 && accounts[0]?.accountId !== undefined && accountKey(accounts[0]) === expectedAccountKey;
   }
 
-  #lines(ctx: ExtensionContext): string[] {
+  #lines(account: OAuthAccountSummary | undefined): string[] {
     const view = this.currentView();
-    const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(
-      WORKBUDDY_PROVIDER,
-      ctx.sessionManager.getSessionId(),
-    );
-    const account = accounts.length === 1 && accounts[0]?.accountId ? accounts[0] : undefined;
     const source = `${view.source}${view.fallbackReason ? ` · ${FALLBACK_REASON_LABELS[view.fallbackReason]}` : ""}`;
     const visibleNames = view.models.slice(0, 4).map((model) => model.name);
     const hiddenModelCount = view.models.length - visibleNames.length;
@@ -221,14 +217,18 @@ export class WorkBuddyUiController {
     return lines;
   }
 
-  #render(ctx: ExtensionContext, notify = false, showWidget = false): string[] | undefined {
+  #render(
+    ctx: ExtensionContext,
+    account: OAuthAccountSummary | undefined,
+    options: Pick<RefreshOptions, "notify" | "showWidget"> = {},
+  ): string[] | undefined {
     if (!ctx.hasUI) return undefined;
-    const lines = this.#lines(ctx);
-    this.#safeWidget(ctx, showWidget ? lines : undefined);
+    const lines = this.#lines(account);
+    this.#safeWidget(ctx, options.showWidget ? lines : undefined);
     // OMP already owns the persistent status line. WorkBuddy details are
     // intentionally command-scoped and disappear on the next turn.
     this.#safeStatus(ctx, undefined);
-    if (notify) {
+    if (options.notify) {
       const message = this.#credits.kind === "available"
         ? `WorkBuddy 状态已更新 · 积分 ${this.#credits.credits.totalRemaining}`
         : "WorkBuddy 状态已更新 · 积分不可用";

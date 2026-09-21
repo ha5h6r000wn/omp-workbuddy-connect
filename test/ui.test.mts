@@ -118,6 +118,42 @@ try {
   const sessionShutdown = handlers.session_shutdown?.[0];
   assert(sessionStart && sessionSwitch && turnStart && sessionShutdown && command, "management handlers were not registered");
 
+  const [snapshotAccount] = authStorage.listOAuthAccounts("workbuddy", "ui-session");
+  assert(snapshotAccount, "snapshot regression setup could not load the WorkBuddy account");
+  let snapshotAccountReads = 0;
+  let resolveSnapshotReports!: (reports: undefined) => void;
+  const snapshotReports = new Promise<undefined>((resolve) => {
+    resolveSnapshotReports = resolve;
+  });
+  const snapshotCtx = {
+    ...ctx,
+    modelRegistry: {
+      authStorage: {
+        listOAuthAccounts() {
+          snapshotAccountReads += 1;
+          return [snapshotAccount];
+        },
+        async fetchUsageReports() {
+          return snapshotReports;
+        },
+      },
+    },
+  };
+  const { WorkBuddyUiController } = await import("../src/ui.ts");
+  const snapshotController = new WorkBuddyUiController(() => ({
+    scope: "all",
+    models: [],
+    source: "desktop-cache",
+    transitioning: false,
+  }));
+  snapshotController.beginSession(snapshotCtx);
+  snapshotAccountReads = 0;
+  const snapshotRefresh = snapshotController.refresh(snapshotCtx);
+  assert(snapshotAccountReads === 1, `loading render reread OAuth accounts; observed ${snapshotAccountReads} reads`);
+  resolveSnapshotReports(undefined);
+  await snapshotRefresh;
+  assert(snapshotAccountReads === 2, `one refresh should read OAuth accounts twice; observed ${snapshotAccountReads}`);
+
   const startResult = await sessionStart({}, ctx);
   assert(startResult === undefined, "session_start returned an unexpected value");
   assert(billingCalls === 0, "session_start started unsolicited Billing");
