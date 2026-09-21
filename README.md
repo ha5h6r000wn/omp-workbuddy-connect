@@ -1,6 +1,6 @@
 # OMP WorkBuddy Connect
 
-> **v1.1.8-rc.1 release candidate for OMP 18.2.6**
+> **v1.1.8-rc.3 release candidate for OMP 18.2.6**
 >
 > 正常单账号、串行换号与完整功能回归已通过；并发 credential replacement 的
 > Bearer/Header 原子关联是 RC 已知限制。正式证据见 `docs/omp-port/release-evidence.md`。
@@ -23,7 +23,7 @@ bun --version
 其他系统按 [Bun 官方安装说明](https://bun.sh/docs/installation) 安装，并确认 `bun --version` 可运行。稳定版仍可固定安装 `v1.1.7`；测试当前 RC 使用：
 
 ```bash
-omp plugin install github:ha5h6r000wn/omp-workbuddy-connect#v1.1.8-rc.1
+omp plugin install github:ha5h6r000wn/omp-workbuddy-connect#v1.1.8-rc.3
 omp
 ```
 
@@ -117,7 +117,7 @@ npm run typecheck
 - 不复用旧 Pi/Fork、DSH 或 Desktop credential；安装后必须执行 `/login workbuddy`。
 - `.workbuddy-auth.json`、`WORKBUDDY_AUTH_FILE` 与 Desktop credential 没有优先级，也不是回退源。
 - 旧 scope 设置不会导入；用 `/workbuddy free` 或 `/workbuddy all` 明确选择。
-- 当前 RC 包版本为 `1.1.8-rc.1`；稳定版仍为 `v1.1.7`。
+- 当前 RC 包版本为 `1.1.8-rc.3`；稳定版仍为 `v1.1.7`。
 
 ## v1 限制
 
