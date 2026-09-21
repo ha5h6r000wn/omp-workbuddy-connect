@@ -14,7 +14,7 @@
 - 让认证、endpoint/header、模型目录、scope/settings、兼容修正、Usage/UI 和生命周期状态按 Provider 隔离。
 - 先将国际站迁移到新结构并证明行为不变，再接入经过真实证据冻结的中国站。
 - 让未知中国站目录或 Billing 能力显式 unavailable，而不是猜测、跨站回退或伪造可用状态。
-- 保持当前模块划分和串行测试运行方式；只添加能防止真实跨 realm 风险的测试。
+- 保持当前模块划分与每脚本独立进程的测试运行方式（`test/run-all.mts` 为每个脚本启动独立 Bun 进程，默认最多 8 个并发，`WORKBUDDY_TEST_CONCURRENCY` 可调）；只添加能防止真实跨 realm 风险的测试。
 
 **Non-Goals:**
 
@@ -104,7 +104,7 @@ Mock 只证明本地边界；中国站发布仍需要真实 OAuth、Chat、reaso
 - **[相同 model ID 导致全局 hook 串扰]** → 所有 dispatch 和 override 以 provider 为第一键，并保留第三方同 ID 原样回归。
 - **[CN 无目录导致 Provider 看似安装但不可用]** → UI 明确报告 unavailable/empty 和原因；不注册伪模型，不回退国际站。
 - **[OMP request identity 能力边界]** → 当前已验证的 pinned OMP 18.2.6 contract 未向 `Model.resolveHeaders` 暴露本次 request session/attempt；扩展只能对唯一 stored row 做 resolver 内前后复核，不能证明 Bearer 与 Headers 在并发换号时原子同源。M1/M3 保留并验证既有产品约束：活动请求先完成或取消，再 logout/login；不得以全局 session、pending queue 或锁伪造证明。实际 `omp/18.2.7` 只完成 smoke，不能替代 API contract 检查。该宿主限制不是 CN 新增 blocker，但发布材料必须明确，不能宣称完整并发原子性。
-- **[双 realm live 验证成本增加]** → 共享确定性测试，但不削减身份、endpoint 和发布矩阵；串行运行避免当前 harness 的共享资源竞争。
+- **[双 realm live 验证成本增加]** → 共享确定性测试，但不削减身份、endpoint 和发布矩阵；每个脚本在自己的 Bun 进程内运行，harness 不存在跨脚本共享资源竞争，因此脚本之间可安全重叠执行，双站新增场景不会线性拉长回归时间。
 
 ## Migration Plan
 

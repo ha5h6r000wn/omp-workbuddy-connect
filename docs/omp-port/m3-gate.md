@@ -42,6 +42,8 @@ npx openspec validate adapt-workbuddy-international-omp --strict
 
 The repository tests are executable `.test.mts` contract scripts rather than `bun:test` declarations, so Bun reports zero formal test cases; their seventeen explicit `OK:` contracts and process exit status are the acceptance signal. Plain `bun test test` succeeds without cross-file environment leakage.
 
+> Erratum (2026-09-21): `bun test <dir>` runs every discovered file in **one** process, sequentially (bun 1.3.14 probe: four files logged the same `pid`, 526 ms apart, and a `globalThis`/`process.env` value written by the first file was observed by the other three). The isolation behind the 17/17 result therefore comes from the scripts restoring test-owned state in `finally`, not from Bun's runner. Per-script process isolation requires `npm test` (`test/run-all.mts`), which spawns one Bun process per script.
+
 ## Request-bound isolation
 
 OMP 18.2.6 passes the exact request Model to `before_provider_request` as `ctx.model`. The hook gates only on `ctx.model.provider === "workbuddy"`; current and historical same-ID foreign Providers are unchanged. The host catches ordinary hook exceptions and continues with the original payload, so the hook cannot enforce fail closed. WorkBuddy model `resolveHeaders` owns active-scope, transition, and revision checks. On the authenticated `streamSimple()` path, host credential selection precedes that resolver; invalid retained models still stop before the previous resolver and HTTP transport.

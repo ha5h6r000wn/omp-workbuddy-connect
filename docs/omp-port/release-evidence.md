@@ -142,6 +142,8 @@ Controlled HTTP faults are deterministic executions of the production UsageProvi
 
 `test/run-all.mts` sequentially executed 19 permanent regression scripts and reported `OK: 19 permanent regression scripts passed`. The scripts collectively retain all twelve V2 §13 behavior classes: isolation, cancellation, identity fail-closed, refresh, account switch, restart, dynamic scope, payload compatibility, streamed tool association, Credits failure semantics, UI stale-result suppression, and headless/Task lifecycle. Fixtures use temporary AuthStorage/config paths and are removed in `finally`; they do not read the live profile or Desktop credentials.
 
+> Erratum (2026-09-21): the runner now overlaps those 19 scripts in bounded-parallel isolated processes (default concurrency ≤ 8, `WORKBUDDY_TEST_CONCURRENCY=<n>`), so its output is `OK: 19 permanent regression scripts passed in <wall>s (concurrency <n>)` followed by the three slowest scripts. The "sequentially executed" wording above describes the run recorded for this release; one Bun process per script is unchanged, which is what keeps `PI_CODING_AGENT_DIR`, global `fetch`, and runtime fixtures isolated.
+
 ## Security, file, and network inspection
 
 - Production URLs are derived only from `https://www.workbuddy.ai`: plugin state/token/refresh, Chat base `/v2`, and Billing `/v2/billing/meter/get-user-resource`.

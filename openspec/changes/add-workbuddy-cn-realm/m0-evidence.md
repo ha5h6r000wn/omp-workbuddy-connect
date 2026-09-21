@@ -43,7 +43,7 @@
 ### 3.2 国际站回归结果
 
 - `npm run typecheck`：通过。
-- `npm test`：通过，19 个串行永久回归脚本全部通过。
+- `npm test`：通过，19 个永久回归脚本全部通过（每个脚本在自己的 Bun 进程内运行）。
 - 当前 HEAD 真实国际站冒烟：在新隔离 profile `workbuddy-m0-intl-20260921` 完成 `/login workbuddy`；退出交互进程后以持久化宿主 credential 运行 `workbuddy/hy3`，3.83 秒返回精确文本 `INTL_M0_OK`，证明 restart/headless/Chat streaming 路径可复现。
 - 验证后执行 `/workbuddy logout`，OMP 显示已断开登录；没有读取、复制或输出 credential。
 - `docs/omp-port/release-evidence.md` 保存了更完整的历史国际站 OAuth/Chat/工具/Usage 矩阵，本次 smoke 补齐当前 HEAD 的最小真实回归。

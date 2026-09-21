@@ -27,27 +27,40 @@ try {
   assert(typeof parsed === "object" && parsed !== null && "scope" in parsed && parsed.scope === "all", "saved scope was not readable");
   assert(Object.keys(parsed).join(",") === "scope", `settings persisted fields other than scope: ${raw}`);
   assert(!raw.includes("token") && !raw.includes("credential") && !raw.includes("secret"), "settings persisted credential material");
-  assert(((await stat(path)).mode & 0o777) === 0o600, "settings permissions are not 0600");
-
-  let failedAtomically = false;
-  await chmod(temp, 0o500);
-  try {
-    await settings.saveSettings(WORKBUDDY_INTL, "free");
-  } catch {
-    failedAtomically = true;
-  } finally {
-    await chmod(temp, 0o700);
+  // NTFS has no POSIX mode bits: stat() reports 0o666 for every writable file and
+  // chmod only toggles the read-only attribute, so owner-only bytes are a POSIX
+  // guarantee. Windows relies on the inherited per-user profile ACLs instead.
+  if (process.platform !== "win32") {
+    assert(((await stat(path)).mode & 0o777) === 0o600, "settings permissions are not 0600");
   }
-  assert(failedAtomically, "read-only settings directory did not exercise the failure path");
-  assert(await readFile(path, "utf8") === raw, "failed atomic update changed committed settings bytes");
-  assert(
-    (await readdir(temp)).join(",") === ".workbuddy-settings.json",
-    "failed atomic update left a temporary settings file",
-  );
+
+  // A read-only directory cannot be built on Windows (chmod leaves writes working),
+  // so reachability of the atomic-failure branch is a POSIX-only check.
+  if (process.platform !== "win32") {
+    let failedAtomically = false;
+    await chmod(temp, 0o500);
+    try {
+      await settings.saveSettings(WORKBUDDY_INTL, "free");
+    } catch {
+      failedAtomically = true;
+    } finally {
+      await chmod(temp, 0o700);
+    }
+    assert(failedAtomically, "read-only settings directory did not exercise the failure path");
+    assert(await readFile(path, "utf8") === raw, "failed atomic update changed committed settings bytes");
+    assert(
+      (await readdir(temp)).join(",") === ".workbuddy-settings.json",
+      "failed atomic update left a temporary settings file",
+    );
+  }
 
   await settings.saveSettings(WORKBUDDY_INTL, "free");
   assert(settings.loadSettings(WORKBUDDY_INTL).scope === "free", "free scope did not survive restart load");
-  console.log("OK: settings use isolated OMP agent dir, replace atomically, persist scope only, and enforce 0600");
+  console.log(
+    `OK: settings use isolated OMP agent dir, replace atomically, and persist scope only${
+      process.platform === "win32" ? "" : " (0600 plus read-only-directory failure path)"
+    }`,
+  );
 } finally {
   if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
   else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
