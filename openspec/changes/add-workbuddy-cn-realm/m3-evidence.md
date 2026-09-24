@@ -2,6 +2,8 @@
 
 记录时间：2026-09-21
 
+> 本文 PASS 只适用于 2026-09-21 的 OMP 18.2.7 / `v1.2.0-rc.1`。OMP 18.3.0 / `v1.2.0-rc.3` 候选的部分验证与未完成发布门槛见 [`../upgrade-omp-18-3-auth-storage/evidence.md`](../upgrade-omp-18-3-auth-storage/evidence.md)，不可沿用本文批准结论。
+
 ## 1. 结论
 
 **M3 functional matrix：PASS。M3 RC publication gate：PASS with documented host limitation。Stable publication：pending RC observation / final review。** `workbuddy` 与 `workbuddy-cn` 的 OAuth、重启、刷新、Chat、scope、并发、取消、main/Task/headless、工具和 vision 均通过。官方 OMP `18.2.7` 的自动 HTTP 400/413 request dump 会移除 Authorization/Token 等认证秘密，但仍可能把动态 `X-User-Id` 原值写入本地诊断附件；该文件不由扩展上传，且未观察到跨 realm 数据。此项按已披露的 host-local privacy limitation 接受用于 RC，不表述为完全脱敏。

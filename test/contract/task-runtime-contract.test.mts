@@ -145,7 +145,7 @@ function installProbeProvider(): void {
 
 async function setAccounts(count: 1 | 2): Promise<void> {
   const expires = Date.now() + 60 * 60 * 1000;
-  await authStorage.set("workbuddy", Array.from({ length: count }, (_, index) => ({
+  await authStorage.credentials.set("workbuddy", Array.from({ length: count }, (_, index) => ({
     type: "oauth" as const,
     access: `access-${index + 1}`,
     refresh: `refresh-${index + 1}`,
@@ -157,9 +157,9 @@ async function setAccounts(count: 1 | 2): Promise<void> {
 
 const getApiKey = async (model: Model): Promise<string | undefined> => {
   if (model.provider !== "workbuddy") return undefined;
-  const accounts = authStorage.listOAuthAccounts("workbuddy");
+  const accounts = authStorage.oauth.accounts("workbuddy");
   if (accounts.length !== 1) throw new Error(`expected one WorkBuddy account; found ${accounts.length}`);
-  const credential = authStorage.get("workbuddy");
+  const credential = authStorage.credentials.get("workbuddy");
   return credential?.type === "oauth" ? credential.access : undefined;
 };
 

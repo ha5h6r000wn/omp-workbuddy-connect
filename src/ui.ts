@@ -107,7 +107,7 @@ export class WorkBuddyUiController {
       return undefined;
     }
 
-    const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(
+    const accounts = ctx.modelRegistry.authStorage.oauth.accounts(
       this.site.providerId,
       ctx.sessionManager.getSessionId(),
     );
@@ -139,9 +139,9 @@ export class WorkBuddyUiController {
     let nextCredits: CreditsState;
     try {
       if (options.forceRefresh) {
-        await ctx.modelRegistry.authStorage.invalidateUsageCache(this.site.providerId, signal);
+        await ctx.modelRegistry.authStorage.usage.invalidate(this.site.providerId, signal);
       }
-      const reports = await ctx.modelRegistry.authStorage.fetchUsageReports({ signal });
+      const reports = await ctx.modelRegistry.authStorage.usage.reports({ signal });
       const report = reports?.find((candidate) => candidate.provider === this.site.providerId
         && candidate.limits.every((limit) => !limit.scope.accountId || limit.scope.accountId === account.accountId));
       const credits = report ? summarizeWorkBuddyUsage(this.site, report) : undefined;
@@ -155,7 +155,7 @@ export class WorkBuddyUiController {
   }
 
   #invalidateOnAccountChange(ctx: ExtensionContext): void {
-    const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(
+    const accounts = ctx.modelRegistry.authStorage.oauth.accounts(
       this.site.providerId,
       ctx.sessionManager.getSessionId(),
     );
@@ -176,7 +176,7 @@ export class WorkBuddyUiController {
     if (this.#activeSessionId !== sessionId || ctx.sessionManager.getSessionId() !== sessionId) return false;
     if (!showWhenInactive && ctx.model?.provider !== this.site.providerId) return false;
     if (this.currentView().scope !== scope) return false;
-    const accounts = ctx.modelRegistry.authStorage.listOAuthAccounts(this.site.providerId, sessionId);
+    const accounts = ctx.modelRegistry.authStorage.oauth.accounts(this.site.providerId, sessionId);
     return accounts.length === 1 && accounts[0]?.accountId !== undefined && accountKey(accounts[0]) === expectedAccountKey;
   }
 

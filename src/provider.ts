@@ -10,7 +10,10 @@ import {
 import { createWorkBuddyUsageProvider } from "./credits.ts";
 import { chatBaseUrl, chatHeaders, type SiteDescriptor } from "./site.ts";
 
-type StoredAuth = Pick<AuthStorage, "listOAuthAccounts" | "remove">;
+type StoredAuth = {
+  readonly oauth: Pick<AuthStorage["oauth"], "accounts">;
+  readonly credentials: Pick<AuthStorage["credentials"], "remove">;
+};
 type ProviderModels = NonNullable<ProviderConfig["models"]>;
 type Fetch = typeof globalThis.fetch;
 
@@ -25,7 +28,7 @@ function identityError(site: SiteDescriptor, reason: string): Error {
 }
 
 function requireSingleStoredAccount(site: SiteDescriptor, binding: RuntimeBinding) {
-  const accounts = binding.authStorage.listOAuthAccounts(site.providerId);
+  const accounts = binding.authStorage.oauth.accounts(site.providerId);
   if (accounts.length !== 1) throw identityError(site, `expected one stored account, found ${accounts.length}`);
   const account = accounts[0]!;
   if (!account.accountId) throw identityError(site, "stored account identity is incomplete");
@@ -244,7 +247,7 @@ export function createWorkBuddyProvider(site: SiteDescriptor, fetcher: Fetch = g
       authenticationAbort.abort(`${site.label} logout`);
       authenticationAbort = new AbortController();
       try {
-        await binding.authStorage.remove(site.providerId);
+        await binding.authStorage.credentials.remove(site.providerId);
         authenticationEnabled = false;
         domainBinding = undefined;
       } catch (error) {

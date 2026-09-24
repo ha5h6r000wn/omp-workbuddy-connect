@@ -80,14 +80,11 @@ let accounts: Array<{
   orgId: "org-a",
   active: false,
 }];
-let getOAuthAccessCalls = 0;
 const authStorage = {
-  listOAuthAccounts() {
-    return accounts;
-  },
-  async getOAuthAccess() {
-    getOAuthAccessCalls += 1;
-    return undefined;
+  oauth: {
+    accounts() {
+      return accounts;
+    },
   },
 };
 const controller = createWorkBuddyProvider(WORKBUDDY_INTL);
@@ -134,7 +131,6 @@ const headers = await projectedWorkBuddy.resolveHeaders();
 assert(previousResolverCalls === 1, "existing resolver was not composed exactly once");
 assert(headers?.["X-Existing"] === "preserved", "existing resolver headers were lost");
 assert(headers?.["X-User-Id"] === "account-a" && headers["X-Enterprise-Id"] === "org-a", "request identity headers mismatch");
-assert(getOAuthAccessCalls === 0, "resolveHeaders performed a redundant OAuth access resolution");
 let releaseSessionHeaders!: () => void;
 headerGate = new Promise<void>((resolve) => { releaseSessionHeaders = resolve; });
 const sessionHeadersStarted = new Promise<void>((resolve) => { markHeaderStarted = resolve; });
@@ -307,7 +303,6 @@ try {
   requestBoundaryRejected = error instanceof Error && error.message.includes("found 0");
 }
 assert(requestBoundaryRejected, "retained WorkBuddy model bypassed request-boundary account guard");
-assert(getOAuthAccessCalls === 0, "provider header resolution called AuthStorage.getOAuthAccess");
 
 
 const cnAccess = `x.${Buffer.from(JSON.stringify({ iss: "https://copilot.tencent.com" })).toString("base64url")}.y`;
@@ -323,8 +318,12 @@ cnController.setModelAccess(new Set(["hy3"]), false);
 cnController.bindContext({
   modelRegistry: {
     authStorage: {
-      listOAuthAccounts: (providerId: string) => providerId === "workbuddy-cn" ? cnAccounts : [],
-      async remove() {},
+      oauth: {
+        accounts: (providerId: string) => providerId === "workbuddy-cn" ? cnAccounts : [],
+      },
+      credentials: {
+        async remove() {},
+      },
     },
   },
 } as unknown as ExtensionContext);

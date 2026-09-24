@@ -1,8 +1,14 @@
 # WorkBuddy OMP Release Evidence
 
-Current status: **v1.2.0-rc.1 dual-realm publication approved on OMP 18.2.7 with a documented host-local diagnostic identity limitation; stable publication remains pending RC observation and final review**
+Current status: **v1.2.0-rc.3 source candidate targets OMP 18.3.0; live two-realm acceptance and publication are not claimed.** Historical v1.2.0-rc.1 approval on OMP 18.2.7 remains recorded below; stable publication remains pending RC observation and final review.
 
 This report contains redacted outcomes only. OAuth tokens, refresh tokens, Authorization values, account identifiers, organization identifiers, OAuth state values, and raw request bodies are intentionally omitted.
+
+## OMP 18.3.0 compatibility addendum (2026-09-24)
+
+OMP 18.3.0 removed the flat `AuthStorage.listOAuthAccounts`, `remove`, `invalidateUsageCache`, `fetchUsageReports`, and `resolver` methods. The 18.3.0 runtime exposes `oauth.accounts`, `credentials.remove`, `usage.invalidate`/`reports`, and `keys.resolver` instead. WorkBuddy migrated the Provider and UI paths; test credentials use the new namespace. No WorkBuddy OAuth, Gateway, or Billing protocol was changed. Provider single-account checks remain session-independent; UI account observations remain session-aware. This is a host API cutover, not evidence of live OAuth or request-identity binding on 18.3.0.
+
+Local checks: `npm test` and `npm run test:fast` each passed 20/20 scripts; typecheck, OpenSpec strict and pack dry-run passed. An isolated real 18.3.0 AuthStorage probe verified namespaced credential CRUD, session-specific account `active`, resolver and Usage APIs. Official OMP 18.3.0 installed, diagnosed and uninstalled the candidate in an isolated profile; with existing authenticated state and the current extension explicitly loaded, Intl/CN Hy3 headless Chat returned their markers. The CN Read-tool path returned the exact package version; interactive `/workbuddy` showed available credits and `/workbuddy-cn` unavailable. The Intl Task tool ran, but its child model/identity was not independently recorded. A concurrent two-realm Chat probe exceeded its observation deadline and was stopped, so concurrency is not passed. Fresh OAuth, restart, forced refresh, scoped logout and the complete 18.3.0 release matrix remain unverified. The 18.2.7 AUTH-04 boundary is not revalidated. Detailed results and remaining gates: [`openspec/changes/upgrade-omp-18-3-auth-storage/evidence.md`](../../openspec/changes/upgrade-omp-18-3-auth-storage/evidence.md).
 
 ## Dual-realm M3 addendum
 

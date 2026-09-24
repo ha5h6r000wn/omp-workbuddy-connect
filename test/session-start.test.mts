@@ -19,7 +19,7 @@ const authStorage = await AuthStorage.create(join(authDir, "auth.db"), {
     return Response.json({ code: 0, data: { Response: { Data: { Accounts: [] } } } });
   },
 });
-await authStorage.set("workbuddy", {
+await authStorage.credentials.set("workbuddy", {
   type: "oauth",
   access: "host-access",
   refresh: "host-refresh",

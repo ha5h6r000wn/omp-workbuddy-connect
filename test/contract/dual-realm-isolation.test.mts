@@ -71,7 +71,7 @@ const registry = new ModelRegistry(authStorage, join(temp, "models.yml"), {
   cacheDbPath: join(temp, "models.db"),
 });
 const expires = Date.now() + 60 * 60 * 1000;
-await authStorage.set("workbuddy", {
+await authStorage.credentials.set("workbuddy", {
   type: "oauth",
   access: "intl-access",
   refresh: "intl-refresh",
@@ -79,7 +79,7 @@ await authStorage.set("workbuddy", {
   accountId: "intl-account",
   orgId: "intl-org",
 });
-await authStorage.set("workbuddy-cn", {
+await authStorage.credentials.set("workbuddy-cn", {
   type: "oauth",
   access: jwt("https://copilot.tencent.com"),
   refresh: "cn-refresh",
@@ -196,8 +196,8 @@ try {
   assert(billingCalls === 1, `international UI did not make exactly one Billing call: ${billingCalls}`);
 
   await commands.get("workbuddy-cn")!("logout", { ...ctx, model: cn });
-  assert(authStorage.listOAuthAccounts("workbuddy-cn").length === 0, "CN logout retained its credential row");
-  assert(authStorage.listOAuthAccounts("workbuddy").length === 1, "CN logout removed the international credential row");
+  assert(authStorage.oauth.accounts("workbuddy-cn").length === 0, "CN logout retained its credential row");
+  assert(authStorage.oauth.accounts("workbuddy").length === 1, "CN logout removed the international credential row");
   let retainedCnRejected = false;
   try {
     await cn.resolveHeaders?.();

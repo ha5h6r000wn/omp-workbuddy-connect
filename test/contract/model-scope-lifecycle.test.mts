@@ -42,7 +42,7 @@ const registry = new ModelRegistry(authStorage, join(temp, "models.yml"), {
   cacheDbPath: join(temp, "models.db"),
 });
 const expires = Date.now() + 60 * 60 * 1000;
-authStorage.set("workbuddy", {
+await authStorage.credentials.set("workbuddy", {
   type: "oauth",
   access: "scope-access",
   refresh: "scope-refresh",
@@ -50,7 +50,7 @@ authStorage.set("workbuddy", {
   accountId: "scope-account",
   orgId: "scope-org",
 });
-const credentialBefore = JSON.stringify(authStorage.get("workbuddy"));
+const credentialBefore = JSON.stringify(authStorage.credentials.get("workbuddy"));
 const previousFetch = globalThis.fetch;
 globalThis.fetch = async () => Response.json({
   code: 0,
@@ -198,7 +198,7 @@ try {
   }
   assert(blockedError instanceof Error && blockedError.message.includes("outside the active"), "retained model was not blocked by its resolver");
   assert(chatRequests === 0, `retained model reached WorkBuddy HTTP ${chatRequests} time(s)`);
-  assert(JSON.stringify(authStorage.get("workbuddy")) === credentialBefore, "scope changes modified the OMP credential row");
+  assert(JSON.stringify(authStorage.credentials.get("workbuddy")) === credentialBefore, "scope changes modified the OMP credential row");
 
   const restartHandlers: Record<string, Function[]> = {};
   const restartPi = {
@@ -210,7 +210,7 @@ try {
   };
   await extension.default(restartPi as never);
   assert(!registry.getAll().some((model) => model.provider === "workbuddy"), "restart widened an authoritative empty free scope");
-  assert(JSON.stringify(authStorage.get("workbuddy")) === credentialBefore, "restart registration modified the OMP credential row");
+  assert(JSON.stringify(authStorage.credentials.get("workbuddy")) === credentialBefore, "restart registration modified the OMP credential row");
 
   console.log("OK: M2 synthetic metadata, transactional scope, retained-model guard, restart, and credential invariants");
 } finally {

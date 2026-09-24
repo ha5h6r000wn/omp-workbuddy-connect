@@ -42,7 +42,7 @@ const registry = new ModelRegistry(authStorage, join(temp, "models.yml"), {
 });
 const controller = createWorkBuddyProvider(WORKBUDDY_INTL, refreshFetch);
 controller.setModelAccess(new Set(["hy3"]), false);
-await authStorage.set(PROVIDER_ID, {
+await authStorage.credentials.set(PROVIDER_ID, {
   type: "oauth",
   access: "access-a1",
   refresh: "refresh-account-a",
@@ -74,8 +74,8 @@ let firstHeaderSawActiveCredential: boolean | undefined;
 retainedModel.resolveHeaders = async (signal?: AbortSignal) => {
   headerResolutionCount += 1;
   if (firstHeaderSawActiveCredential === undefined) {
-    firstHeaderSawActiveCredential = authStorage
-      .listOAuthAccounts(PROVIDER_ID, SESSION)
+    firstHeaderSawActiveCredential = authStorage.oauth
+      .accounts(PROVIDER_ID, SESSION)
       .some((account) => account.active);
   }
   return originalResolveHeaders(signal);
@@ -139,7 +139,7 @@ function currentModel(): Model {
 
 async function request(model: Model, sessionId = SESSION): Promise<void> {
   const stream = streamSimple(model, context, {
-    apiKey: authStorage.resolver(PROVIDER_ID, {
+    apiKey: authStorage.keys.resolver(PROVIDER_ID, {
       sessionId,
       baseUrl: model.baseUrl,
       modelId: model.id,
@@ -176,7 +176,7 @@ try {
   assert(normal.origin === "https://www.workbuddy.ai", "fixed Origin missing");
   assert(normal.domain === "www.workbuddy.ai" && normal.product === "SaaS", "fixed WorkBuddy headers missing");
 
-  await authStorage.set(PROVIDER_ID, oauth("access-a1", "account-a", "org-a", Date.now() - 1));
+  await authStorage.credentials.set(PROVIDER_ID, oauth("access-a1", "account-a", "org-a", Date.now() - 1));
   await request(retainedModel);
   const forced = attempts.at(-1)!;
   assert(forced.authorization === "Bearer access-a2", `forced refresh bearer: ${forced.authorization}`);
@@ -196,22 +196,22 @@ try {
   );
   assert(retry.every((attempt) => attempt.userId === "account-a" && attempt.orgId === "org-a"), "401 retry crossed identity");
 
-  await authStorage.remove(PROVIDER_ID);
-  await authStorage.set(PROVIDER_ID, oauth("access-b1", "account-b", "org-b", Date.now() + 60 * 60 * 1000));
+  await authStorage.credentials.remove(PROVIDER_ID);
+  await authStorage.credentials.set(PROVIDER_ID, oauth("access-b1", "account-b", "org-b", Date.now() + 60 * 60 * 1000));
   await request(retainedModel, SECOND_SESSION);
   const switched = attempts.at(-1)!;
   assert(switched.authorization === "Bearer access-b1", "retained model did not resolve B bearer");
   assert(switched.userId === "account-b" && switched.orgId === "org-b", "retained model kept A identity");
   assert(
-    authStorage.listOAuthAccounts(PROVIDER_ID, SECOND_SESSION).some((account) => account.active),
+    authStorage.oauth.accounts(PROVIDER_ID, SECOND_SESSION).some((account) => account.active),
     "second request session did not select B",
   );
   assert(
-    !authStorage.listOAuthAccounts(PROVIDER_ID, SESSION).some((account) => account.active),
+    !authStorage.oauth.accounts(PROVIDER_ID, SESSION).some((account) => account.active),
     "deleted A remained active in the original session",
   );
 
-  await authStorage.set(PROVIDER_ID, [
+  await authStorage.credentials.set(PROVIDER_ID, [
     oauth("access-b1", "account-b", "org-b", Date.now() + 60 * 60 * 1000),
     oauth("access-c1", "account-c", "org-c", Date.now() + 60 * 60 * 1000),
   ]);
@@ -225,7 +225,7 @@ try {
   assert(ambiguityRejected, "two stored accounts were not rejected explicitly");
   assert(attempts.length === beforeAmbiguous, "two stored accounts reached provider transport");
 
-  await authStorage.set(PROVIDER_ID, oauth("access-b1", "account-b", undefined, Date.now() + 60 * 60 * 1000));
+  await authStorage.credentials.set(PROVIDER_ID, oauth("access-b1", "account-b", undefined, Date.now() + 60 * 60 * 1000));
   await request(retainedModel);
   const withoutEnterprise = attempts.at(-1)!;
   assert(withoutEnterprise.userId === "account-b", "optional enterprise path lost account identity");

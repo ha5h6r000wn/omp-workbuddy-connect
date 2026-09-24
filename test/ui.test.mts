@@ -56,7 +56,7 @@ const credential = (accountId: string, email?: string) => ({
   accountId,
   ...(email ? { email } : {}),
 });
-await authStorage.set("workbuddy", credential("account-a", "employee@example.com"));
+await authStorage.credentials.set("workbuddy", credential("account-a", "employee@example.com"));
 
 const handlers: Record<string, Function[]> = {};
 let command: ((args: unknown, ctx: any) => Promise<void>) | undefined;
@@ -119,7 +119,7 @@ try {
   const sessionShutdown = handlers.session_shutdown?.[0];
   assert(sessionStart && sessionSwitch && turnStart && sessionShutdown && command, "management handlers were not registered");
 
-  const [snapshotAccount] = authStorage.listOAuthAccounts("workbuddy", "ui-session");
+  const [snapshotAccount] = authStorage.oauth.accounts("workbuddy", "ui-session");
   assert(snapshotAccount, "snapshot regression setup could not load the WorkBuddy account");
   let snapshotAccountReads = 0;
   let resolveSnapshotReports!: (reports: undefined) => void;
@@ -130,12 +130,16 @@ try {
     ...ctx,
     modelRegistry: {
       authStorage: {
-        listOAuthAccounts() {
-          snapshotAccountReads += 1;
-          return [snapshotAccount];
+        oauth: {
+          accounts() {
+            snapshotAccountReads += 1;
+            return [snapshotAccount];
+          },
         },
-        async fetchUsageReports() {
-          return snapshotReports;
+        usage: {
+          async reports() {
+            return snapshotReports;
+          },
         },
       },
     },
@@ -161,15 +165,19 @@ try {
     model: { provider: "workbuddy-cn", id: "cn-model" },
     modelRegistry: {
       authStorage: {
-        listOAuthAccounts() {
-          return [snapshotAccount];
+        oauth: {
+          accounts() {
+            return [snapshotAccount];
+          },
         },
-        async invalidateUsageCache() {
-          disabledUsageCalls += 1;
-        },
-        async fetchUsageReports() {
-          disabledUsageCalls += 1;
-          return [];
+        usage: {
+          async invalidate() {
+            disabledUsageCalls += 1;
+          },
+          async reports() {
+            disabledUsageCalls += 1;
+            return [];
+          },
         },
       },
     },
@@ -225,8 +233,8 @@ try {
 
   const staleAccountRefresh = command("", ctx);
   await waitForCalls(2);
-  await authStorage.remove("workbuddy");
-  await authStorage.set("workbuddy", credential("account-b"));
+  await authStorage.credentials.remove("workbuddy");
+  await authStorage.credentials.set("workbuddy", credential("account-b"));
   await sessionSwitch({}, ctx);
   assert(billingCalls === 2, "session_switch started unsolicited Billing");
   assert(widgets.at(-1) === undefined, "session_switch did not dismiss WorkBuddy detail");
@@ -243,7 +251,7 @@ try {
   assert(!widgets.at(-1)?.some((line) => line.includes("account-b")), "account B identity leaked into the Widget");
   assert(widgets.at(-1)?.some((line) => line === "积分  8"), "account B credits were not rendered");
 
-  await authStorage.invalidateUsageCache("workbuddy");
+  await authStorage.usage.invalidate("workbuddy");
   const staleScopeRefresh = command("", ctx);
   await waitForCalls(4);
   await command("free", ctx);
@@ -261,7 +269,7 @@ try {
   assert(widgets.at(-1)?.some((line) => line === "范围  free · 0 模型 · desktop-cache"), "explicit status omitted the empty free scope");
   assert(widgets.at(-1)?.some((line) => line === "模型  （当前范围为空）"), "explicit status omitted the empty model state");
 
-  await authStorage.invalidateUsageCache("workbuddy");
+  await authStorage.usage.invalidate("workbuddy");
   const pendingDetail = command("", ctx);
   await waitForCalls(6);
   await turnStart({}, { ...ctx, model: { provider: "openai", id: "gpt" } });

@@ -34,7 +34,7 @@ const authStorage = await AuthStorage.create(join(temp, "auth.db"), {
 const registry = new ModelRegistry(authStorage, join(temp, "models.yml"), {
   cacheDbPath: join(temp, "models.db"),
 });
-await authStorage.set("workbuddy", {
+await authStorage.credentials.set("workbuddy", {
   type: "oauth",
   access: "access-a",
   refresh: "refresh-a",
@@ -114,8 +114,8 @@ try {
   const retained = registry.find("workbuddy", "hy3") as Model | undefined;
   assert(retained?.resolveHeaders, "retained WorkBuddy model has no identity resolver");
 
-  const originalRemove = authStorage.remove.bind(authStorage);
-  (authStorage as unknown as { remove(provider: string): Promise<void> }).remove = async () => {
+  const originalRemove = authStorage.credentials.remove.bind(authStorage.credentials);
+  authStorage.credentials.remove = async () => {
     throw new Error("simulated host delete failure");
   };
   await command("logout", ctx);
@@ -131,10 +131,10 @@ try {
     "failed host deletion did not restore the prior usable authentication state",
   );
 
-  (authStorage as unknown as { remove(provider: string): Promise<void> }).remove = originalRemove;
+  authStorage.credentials.remove = originalRemove;
   failNextRegister = true;
   await command("logout", ctx);
-  assert(authStorage.listOAuthAccounts("workbuddy").length === 0, "provider-scoped logout did not delete host credentials");
+  assert(authStorage.oauth.accounts("workbuddy").length === 0, "provider-scoped logout did not delete host credentials");
   assert(
     notifications.at(-1)?.type === "warning"
       && notifications.at(-1)?.message.includes("已断开登录")

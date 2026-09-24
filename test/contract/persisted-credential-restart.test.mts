@@ -34,7 +34,7 @@ globalThis.fetch = async () => Response.json({
   data: { Response: { Data: { Accounts: [] } } },
 });
 const expires = Date.now() + 60 * 60 * 1000;
-await authStorage.set("workbuddy", {
+await authStorage.credentials.set("workbuddy", {
   type: "oauth",
   access: "access-a",
   refresh: "refresh-a",
@@ -87,8 +87,8 @@ try {
   assert(keyA === "access-a", `persisted host access was not restored: ${keyA}`);
   assert(headersA?.["X-User-Id"] === "account-a" && headersA["X-Enterprise-Id"] === "org-a", "persisted identity headers mismatch");
 
-  await authStorage.remove("workbuddy");
-  await authStorage.set("workbuddy", {
+  await authStorage.credentials.remove("workbuddy");
+  await authStorage.credentials.set("workbuddy", {
     type: "oauth",
     access: "access-b",
     refresh: "refresh-b",

@@ -66,7 +66,7 @@ const authStorage = await AuthStorage.create(join(temp, "auth.db"), {
 const registry = new ModelRegistry(authStorage, join(temp, "models.yml"), {
   cacheDbPath: join(temp, "models.db"),
 });
-await authStorage.set("workbuddy", {
+await authStorage.credentials.set("workbuddy", {
   type: "oauth",
   access: "billing-access",
   refresh: "billing-refresh",
@@ -82,7 +82,7 @@ controller.bindContext({
 registry.registerProvider("workbuddy", controller.config([]));
 
 try {
-  const usage = authStorage.usageProviderFor("workbuddy");
+  const usage = authStorage.usage.providerFor("workbuddy");
   assert(usage?.retainLastGoodOnFailure === false, "UsageProvider retained stale successful credits");
   assert(usage.validatesCredentials === false, "UsageProvider overclaimed credential health validation");
 
@@ -124,7 +124,7 @@ try {
     metadata: { totalRemaining: 0, totalLimit: 0, plans: [] },
   }) === undefined, "empty normalized usage report was presented as genuine zero");
 
-  let reports = await authStorage.fetchUsageReports();
+  let reports = await authStorage.usage.reports();
   assert(reports?.length === 1, "successful Billing response did not produce one report");
   assert(reports[0]?.metadata?.totalRemaining === 5, "remaining credits were not normalized");
   assert(reports[0]?.metadata?.plans instanceof Array, "plan metadata was not normalized");
@@ -133,18 +133,18 @@ try {
   assert(!lastHeaders?.has("x-enterprise-id"), "Billing sent unevidenced X-Enterprise-Id");
 
   mode = "failure";
-  await authStorage.invalidateUsageCache("workbuddy");
-  reports = await authStorage.fetchUsageReports();
+  await authStorage.usage.invalidate("workbuddy");
+  reports = await authStorage.usage.reports();
   assert(reports?.length === 0, "5xx reused the last-good credit report");
 
   mode = "malformed";
-  await authStorage.invalidateUsageCache("workbuddy");
-  reports = await authStorage.fetchUsageReports();
+  await authStorage.usage.invalidate("workbuddy");
+  reports = await authStorage.usage.reports();
   assert(reports?.length === 0, "malformed Billing response was parsed as zero credits");
 
   mode = "zero";
-  await authStorage.invalidateUsageCache("workbuddy");
-  reports = await authStorage.fetchUsageReports();
+  await authStorage.usage.invalidate("workbuddy");
+  reports = await authStorage.usage.reports();
   assert(reports?.[0]?.metadata?.totalRemaining === 0, "genuine zero credits were not preserved");
   const zeroSummary = summarizeWorkBuddyUsage(WORKBUDDY_INTL, reports[0]!);
   assert(
@@ -155,13 +155,13 @@ try {
   );
 
   mode = "slow";
-  await authStorage.invalidateUsageCache("workbuddy");
+  await authStorage.usage.invalidate("workbuddy");
   const started = Date.now();
-  reports = await authStorage.fetchUsageReports();
+  reports = await authStorage.usage.reports();
   assert(reports?.length === 0, "timed-out Billing returned a report");
   assert(Date.now() - started < 1_000, "Billing timeout did not terminate promptly");
 
-  await authStorage.set("workbuddy", [
+  await authStorage.credentials.set("workbuddy", [
     {
       type: "oauth",
       access: "billing-access",
@@ -180,8 +180,8 @@ try {
   ]);
   mode = "success";
   const callsBeforeAmbiguous = calls;
-  await authStorage.invalidateUsageCache("workbuddy");
-  reports = await authStorage.fetchUsageReports();
+  await authStorage.usage.invalidate("workbuddy");
+  reports = await authStorage.usage.reports();
   assert(reports?.length === 0, "ambiguous stored accounts produced Billing usage");
   assert(calls === callsBeforeAmbiguous, "ambiguous stored accounts reached Billing HTTP");
 
