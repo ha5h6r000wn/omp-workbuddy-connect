@@ -1,8 +1,8 @@
 # OMP WorkBuddy Connect
 
-> **当前源码准备 v1.2.0-rc.3，针对 OMP 18.3.0 的 AuthStorage 命名空间接口；尚未发布或完成完整的真实账号 release matrix。**
+> **当前源码准备 v1.2.0-rc.3，针对 OMP 18.3.0 的 AuthStorage 命名空间接口；尚未发布或完成受影响认证生命周期的真实验收。**
 >
-> 已发布的 v1.2.0-rc.2 基于 OMP 18.2.7。18.3.0 上已用现有登录态完成双站 Hy3 Chat 与管理界面冒烟；跨站并发探针超时，fresh OAuth、强制刷新、认证后 Task 子进程与安全矩阵尚未重验。既有验收与本次候选的分项证据见 `docs/omp-port/release-evidence.md`。
+> 已发布的 v1.2.0-rc.2 基于 OMP 18.2.7。18.3.0 上已用现有登录态完成双站 Hy3 Chat、管理界面及一次有事件时间戳的双站并发 Chat；此前另一次并发探针超时，原因仍未查明。双站 fresh OAuth、重启后 Chat、强制刷新、scoped logout 和真实 Task 子进程身份尚未重验。既有验收与本次候选的分项证据见 `docs/omp-port/release-evidence.md`。
 
 ## 当前版本
 
@@ -133,7 +133,7 @@ npm run typecheck
 - 两个 realm 均不提供常驻 Widget/status；运行对应管理命令可临时查看详情，下一次 `turn_start` 自动收起。
 - 中国站 Usage/Billing 未批准并保持 disabled；Chat、reasoning、tools、vision 不依赖 Billing。目录可见只表示结构合格，不保证测试账号实时获准调用；M3 中 MiniMax-M2.5 即由官方 Gateway 返回不可用。
 - 同 ID 的其他 Provider 不经过 WorkBuddy payload 或身份逻辑。本 RC 不包含多账号轮换、自动地区探测、跨站 fallback、Desktop credential import、自定义 Chat transport、在线动态目录端点或即时 model-select UI。
-- **OMP 本地诊断限制：** OMP `18.2.7` 在部分 HTTP 400/413 后会写入 `~/.omp/logs/http-400-requests/`（named profile 位于对应 profile 日志目录）。宿主会移除 Authorization、Token 等 credential，但动态 `X-User-Id` 账号标识可能保留原值；本扩展不上传该文件，也不会擅自删除宿主日志。请将其作为私有账号数据保管或手动删除。
+- **OMP 本地诊断限制：** OMP `18.2.7` 的真实 HTTP 400/413 验收发现，宿主本地 `~/.omp/logs/http-400-requests/` 附件可能保留动态 `X-User-Id` 账号标识。`18.3.0` 的宿主脱敏源码仍只按含 `key|token|secret|auth|credential|cookie` 的 Header 名称移除值，不匹配 `X-User-Id`；本次未重新制造 400/413 附件，因此继续按可能保留账号标识处理。named profile 使用对应 profile 日志目录；本扩展不上传或擅自删除宿主日志。请将附件作为私有账号数据保管或手动删除。
 - 当前 OMP Usage API 是跨 Provider 聚合刷新；`/workbuddy` 只展示国际站报告，但刷新缓存时宿主可能同时查询其他已配置 Provider。
 
 ## License

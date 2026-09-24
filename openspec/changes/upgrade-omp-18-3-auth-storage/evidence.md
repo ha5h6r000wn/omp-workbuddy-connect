@@ -22,10 +22,14 @@ OMP 18.3.0 以 `AuthStorage.oauth.accounts(provider, sessionId?)`、`credentials
 | 中国站 headless Read 的 JSON 事件 | 观察到 `read` start/end；读取 `package.json` 后 assistant 返回精确值 `CN_PACKAGE_VERSION=1.2.0-rc.3` | 现有登录态下的只读工具路径，不是 fresh OAuth |
 | 官方交互式 TUI 加载当前源码后执行 `/workbuddy`、`/workbuddy-cn` | 国际站显示“积分可用”，中国站显示“积分不可用” | 本次未实测中国站 Billing 网络请求数；确定性双站契约覆盖零请求 |
 | 国际站模型下的 headless `task` 请求 | 观察到 `task` start/end 和最终回答标记 | 未独立记录子进程实际模型、realm 和认证身份；不能计入真实 WorkBuddy Task E2E |
-| 双站并发 headless 探针 | 两个进程超过 110 秒观察期限后被停止 | 未取得并发结果或根因，**不通过** |
+| 首次双站并发 headless 探针 | 两个进程超过 110 秒观察期限后被停止 | 当时未保留阶段事件；原因仍未知，不可写成通过 |
+| 后续带时间戳的双站并发 Chat | `workbuddy/hy3` 与 `workbuddy-cn/hy3` 同时启动、均 exit 0 并返回各自预期标记；首个 `message_update` 分别在约 3.1 秒、1.5 秒，进程分别在约 12.8 秒、10.8 秒退出 | 证明本次并发请求可完成；不能反推首次超时的原因或排除偶发问题 |
+| 18.3.0 本地 HTTP 诊断源码检查 | `@oh-my-pi/pi-ai/src/utils/http-inspector.ts` 的敏感 Header 正则仍为 `/key|token|secret|auth|credential|cookie/i`，不匹配 `X-User-Id` | 旧版已观察的本地账号标识风险仍需告知；本次未制造 HTTP 400/413 或审计新的真实 dump |
+
+带时间戳的并发探针还观察到两个 `agent_start` 均在约 0.38 秒、`agent_end` 分别在约 3.1/2.0 秒、`advisor_yielded` 在约 12.7/10.7 秒。**本次** transport/模型回复与 agent 结束均未卡在账号选择或 SQLite；进程结束前还经历了宿主后续阶段。但首次 110 秒超时未记录同类事件，无法判定当时卡在 auth、HTTP、Gateway 或宿主退出阶段，需保留为未定位的偶发失败。
 
 本增补未记录原始账号标识、Token、Authorization、请求体或 OAuth state。现有用户 profile 用于非破坏性 Chat、只读工具、Task 调用及管理界面观察；未执行 logout、覆盖凭据、scope 切换或强制过期。Task 子进程身份未确认，不据此声称完整的无副作用证明。
 
 ## 发布门槛
 
-`rc.3` 仍是兼容性候选，**本增补不批准发布**。OMP 18.3.0 上的双站 fresh OAuth、重启恢复、强制刷新、逐次重试身份绑定、已确认子模型的真实 Task、串行换号及 scoped logout、完整 main/headless 能力、工具/vision/三模型矩阵、中国站 Billing 零网络请求和官方诊断隐私检查尚未作为完整真实矩阵重验。Fresh login 及破坏性 logout/expiry 操作需要获授权的隔离账号与 profile、交互式授权；未在用户现有 profile 上执行。并发超时问题也未闭环。历史 M3 的勾选和 PASS 只对应 OMP 18.2.7。
+`rc.3` 仍是兼容性候选，**本增补不批准发布**。本次 auth-affected 验收已有真实 18.3.0 AuthStorage 与 `streamSimple` 的 401/刷新/重试契约、单账号/退出回归、CN disabled Usage 零调用回归、双站现有登录态 Chat/UI、一次成功的带时间戳并发 Chat。尚未在获授权的隔离 profile 完成双站 fresh OAuth + Chat、重启后 Chat、强制刷新、按 realm 退出及实际 Task 子进程的 Provider/模型/身份确认；首次并发超时的原因也未查明。Fresh login 和破坏性 logout/expiry 需要隔离账号与交互式授权，不能操作默认用户 profile。旧 M3 的三模型、完整 vision、工具能力等非本次改动范围，保留 18.2.7 历史证据而不宣称 18.3.0 全量重测；故意制造官方 Gateway 401 或 CN Billing 请求不属于本候选必要门槛。历史 M3 勾选与 PASS 只对应 18.2.7。

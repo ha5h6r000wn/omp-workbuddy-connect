@@ -11,8 +11,9 @@
 - [x] 两种测试运行器各 20/20、类型检查、OpenSpec strict、pack dry-run；在官方隔离 profile 中完成安装、doctor、无凭据模型列表和卸载。
 - [x] 使用现有登录态在官方 18.3.0 上验证双站 Hy3 headless Chat、国际站管理积分显示、中国站不可用显示，并确认中国站 `read` 工具返回文件中的精确版本。详细结果及限制见 [`evidence.md`](./evidence.md)。
 
-## 未通过的发布门槛
+## 尚未通过的受影响发布门槛
 
-- [ ] 在获授权的隔离 profile 中重跑两站 fresh OAuth、重启、强制刷新、401 重试与请求身份、串行换号和 scoped logout；不修改用户默认 profile 的真实凭据。
-- [ ] 确认真实 Task 子进程模型与认证、双站并发 Chat、CN Billing 零网络请求、完整工具/vision/模型范围及诊断隐私。此前并发探针超时，未取得通过结论。
-- [ ] 核对 AUTH-04 宿主 request-attempt identity 能力；完成全部受影响真实发布门槛后再决定 `rc.3` 是否可发布。历史 M3 勾选仅属于 OMP 18.2.7。
+- [x] 18.3.0 真实 AuthStorage + `streamSimple` 契约覆盖 401→强制刷新→重试、逐次 Header 解析和身份校验；独立 UI 回归覆盖 CN disabled Usage 的零调用。不为制造生产 Gateway 401 或 Billing 网络请求而破坏真实账号。
+- [ ] 在获授权的隔离 profile 中完成国际站与中国站 fresh OAuth、登录后 Chat、重启后 Chat、各自 forced refresh，以及先 CN logout（CN 拒绝、Intl 仍可 Chat）再 Intl logout；不修改用户默认 profile 的真实凭据。
+- [ ] 至少一轮真实 Task，独立记录实际 Provider、模型、realm 与完成结果；排查先前并发探针超时的原因。后续带事件时间戳的双站并发 Chat 已成功，但尚不能解释先前的 110 秒超时。
+- [ ] 完成上述 auth-affected 矩阵后重新执行包、测试、类型与 OpenSpec 检查并决定 `rc.3` 发布；不重复与本次迁移无关的三模型、完整 vision、全工具及旧版 M3 能力矩阵。旧 M3 勾选仅对应 OMP 18.2.7。
