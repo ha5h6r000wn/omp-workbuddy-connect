@@ -1,8 +1,8 @@
 # OMP WorkBuddy Connect
 
-> **当前源码准备 v1.2.0-rc.3，针对 OMP 18.3.0 的 AuthStorage 命名空间接口；尚未发布或完成受影响认证生命周期的真实验收。**
+> **当前源码准备 v1.2.0-rc.3，针对 OMP 18.3.0 的 AuthStorage 命名空间接口；尚未发布，发布门槛暂未批准。**
 >
-> 已发布的 v1.2.0-rc.2 基于 OMP 18.2.7。18.3.0 上已用现有登录态完成双站 Hy3 Chat、管理界面及一次有事件时间戳的双站并发 Chat；此前另一次并发探针超时，原因仍未查明。双站 fresh OAuth、重启后 Chat、强制刷新、scoped logout 和真实 Task 子进程身份尚未重验。既有验收与本次候选的分项证据见 `docs/omp-port/release-evidence.md`。
+> 已发布的 v1.2.0-rc.2 基于 OMP 18.2.7。18.3.0 上已完成隔离 profile 的双站 fresh OAuth、Chat、跨进程重启、强制刷新、真实中国站 Task、同时发起的双站 Chat 和按 realm 退出；此前默认 profile 的一次无阶段并发探针超过 110 秒，原因仍未查明，后续成功不能排除偶发故障。18.3.0 的受影响矩阵、未覆盖边界及发布决定见 `openspec/changes/upgrade-omp-18-3-auth-storage/evidence.md` 和 `docs/omp-port/release-evidence.md`；旧版完整能力矩阵不视作 18.3.0 重测。
 
 ## 当前版本
 

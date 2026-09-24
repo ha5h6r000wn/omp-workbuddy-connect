@@ -11,9 +11,10 @@
 - [x] 两种测试运行器各 20/20、类型检查、OpenSpec strict、pack dry-run；在官方隔离 profile 中完成安装、doctor、无凭据模型列表和卸载。
 - [x] 使用现有登录态在官方 18.3.0 上验证双站 Hy3 headless Chat、国际站管理积分显示、中国站不可用显示，并确认中国站 `read` 工具返回文件中的精确版本。详细结果及限制见 [`evidence.md`](./evidence.md)。
 
-## 尚未通过的受影响发布门槛
+## 受影响发布门槛
 
 - [x] 18.3.0 真实 AuthStorage + `streamSimple` 契约覆盖 401→强制刷新→重试、逐次 Header 解析和身份校验；独立 UI 回归覆盖 CN disabled Usage 的零调用。不为制造生产 Gateway 401 或 Billing 网络请求而破坏真实账号。
-- [ ] 在获授权的隔离 profile 中完成国际站与中国站 fresh OAuth、登录后 Chat、重启后 Chat、各自 forced refresh，以及先 CN logout（CN 拒绝、Intl 仍可 Chat）再 Intl logout；不修改用户默认 profile 的真实凭据。
-- [ ] 至少一轮真实 Task，独立记录实际 Provider、模型、realm 与完成结果；排查先前并发探针超时的原因。后续带事件时间戳的双站并发 Chat 已成功，但尚不能解释先前的 110 秒超时。
-- [ ] 完成上述 auth-affected 矩阵后重新执行包、测试、类型与 OpenSpec 检查并决定 `rc.3` 发布；不重复与本次迁移无关的三模型、完整 vision、全工具及旧版 M3 能力矩阵。旧 M3 勾选仅对应 OMP 18.2.7。
+- [x] 在获授权的隔离 profile 中完成国际站与中国站 fresh OAuth、登录后 Chat、重启后 Chat、各自 forced refresh；先 CN logout 后 Intl 仍可 Chat，CN 凭据及可选模型均为零，再 Intl logout。CN 退出后未另发真实 Chat 请求；未修改默认 profile。
+- [x] 真实 CN Task 记录子会话 Provider/模型、请求前 hook 的 realm/模型与完成结果；隔离 profile 双站同时发起的 Chat 均完成。事件不含 Bearer，不能宣称逐请求原子绑定身份。
+- [ ] 首次默认 profile 双站并发探针超过 110 秒且无阶段记录，后续两次带时间戳的并发成功仍未定位该偶发超时；发布前需定位，或明确接受其不可量化的间歇性风险。
+- [x] auth-affected 矩阵后重新执行包、两种测试运行器、类型与双 OpenSpec strict 检查；因首次并发超时未定位且未接受其风险，决定暂不批准 `rc.3` 发布或打 tag。不重复与本次迁移无关的三模型、完整 vision、全工具及旧版 M3 能力矩阵。旧 M3 勾选仅对应 OMP 18.2.7。
