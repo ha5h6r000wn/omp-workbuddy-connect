@@ -32,7 +32,7 @@ OMP 18.3.0 以 `AuthStorage.oauth.accounts(provider, sessionId?)`、`credentials
 
 ## OMP 18.3.0 隔离 profile 定向真实验收
 
-2026-09-24 在 Darwin arm64、官方 `omp/18.3.0`、Node `v26.9.0`、Bun `1.4.2` 上验收未发布 `1.2.0-rc.3`，源码基线 `b5eb7666eaf11cc2d558711b9ec7fb2e7bec4f59`。专用 profile `wb-183-rc3-live-0924` 与默认 profile 隔离；安装当前源码的插件后 doctor 显示插件 `ok`，新 profile 的 `package_manifest` 仍有“Not created yet”警告。以下只记脱敏的退出状态、模型/realm、行数、过期时间方向、阶段事件与自定义标记。
+2026-09-24 在 Darwin arm64、官方 `omp/18.3.0`、Node `v26.9.0`、Bun `1.4.2` 上验收未发布 `1.2.0-rc.3`。生产实现提交为 `a2c2b71caeabc12b8d3e97de78960c2ec0da4603`，双站登录/刷新/Task 真实验收源码基线为 `b5eb7666eaf11cc2d558711b9ec7fb2e7bec4f59`；后续 `0f620f3cffb3521ffe3b0a644eb51c712261d789` 仅更新文档/规格，本次并发复测以该提交的干净工作树启动。`a2c2b71..0f620f3` 的变更文件均为 README、发布证据或 OpenSpec，不含运行时与包声明；最终发布决策文档仍待提交，不能把上述源码基线当成最终 tag SHA。专用 profile `wb-183-rc3-live-0924` 与默认 profile 隔离；安装当前源码的插件后 doctor 显示插件 `ok`，新 profile 的 `package_manifest` 仍有“Not created yet”警告。以下只记脱敏的退出状态、模型/realm、行数、过期时间方向、阶段事件与自定义标记。
 
 | 受影响路径 | 实际观察 | 证据边界 |
 |---|---|---|
@@ -46,6 +46,18 @@ OMP 18.3.0 以 `AuthStorage.oauth.accounts(provider, sessionId?)`、`credentials
 
 此前默认 profile 的无阶段并发超时仍缺乏可归因事件；随后同 profile 的带时间戳探针与本次隔离 profile 探针成功，均不能证明问题已经消失。18.3.0 的 `resolveHeaders` 仍不暴露所选 Bearer 对应行，单账号/串行换号边界及本地 `X-User-Id` 诊断风险不变。本节没有收集真实请求凭据、Header、OAuth state 或 HTTP 400/413 附件。
 
+## 并发稳定性补充与 RC 风险决定
+
+在独立新 profile `wb-183-rc3-concurrency-0924` 上通过官方插件安装并分别 fresh login 一次；仅运行受争议的 `workbuddy/hy3` 与 `workbuddy-cn/hy3` 双站 headless Chat，不重跑 OAuth 刷新、Task 或完整 M3。预先限定连续 10 轮，每轮同时启动两个官方 CLI 进程；每进程须在 30 秒内 exit 0、返回本轮/本站唯一标记、无 error 事件，并保留 `session_start`、`before_provider_request`、`agent_start`、首个 `message_update`、`agent_end`、退出结果。观察 hook 只写阶段名、时间与白名单 Provider/模型，探针只输出脱敏的计数、耗时和事件名，未保存原始 Chat/HTTP/凭据/账号标识。
+
+| 隔离并发复测 | 实际观察 | 边界 |
+|---|---|---|
+| 10 轮 × Intl/CN 各 1 次，连续执行 | 20/20 进程 exit 0、各返回本站及本轮标记；没有 error 事件、解析错误或 stderr；均未触及 30 秒观察阈值 | 仅 Hy3、相同隔离 profile 的稳定单账号；不是跨 session 并发换号或其他模型证明 |
+| 双进程阶段与耗时 | 20 个进程均记录匹配的 `session_start` 与 `before_provider_request`，并有 `agent_start`、`message_update`、`agent_end`；Intl 最慢 3419 毫秒，中国站最慢 2961 毫秒 | 只证明这 10 轮端到端完成；没有 Bearer/Header 原子身份观测，也不能推断首次无阶段超时的位置 |
+| 环境与清理 | 官方插件 doctor 状态 `ok`，新 profile 的 `package_manifest` 为“Not created yet”警告；卸载后插件列表为空，仅删除新建的隔离 profile、临时观察 hook 与只含阶段元数据的探针文件 | 默认 profile 未做任何登录、刷新、退出或凭据写入 |
+
+**RC 风险接受：**首次默认 profile 的一次双站并发超过 110 秒且无阶段事件，根因未定位；其后同 profile 的一次、先前隔离 profile 的一次以及本次 10 次隔离有阶段探针均成功。10/10 是有界场景的观察样本，不能排除低频故障、给出可靠故障率上限，亦不能证明旧失败属于宿主或环境；不添加无根据的锁、重试、timeout 或 SQLite workaround。基于受影响功能矩阵通过、这组可观测重复探针及现有单账号/串行换号支持边界，**明确接受该未定位历史异常作为 `rc.3` 的剩余风险**。若后续再次出现超时，保留阶段数据定位并重新评估发布决定。
+
 ## 发布门槛
 
-`rc.3` 仍是兼容性候选，**本增补不批准发布或打 tag**。18.3.0 的受影响路径已完成双站隔离 fresh OAuth、Chat、跨进程重启、强制刷新、一次双站同时发起的 Chat、真实 CN Task 子会话 Provider/模型观察、按 realm 退出及另一 realm 的 Chat 保持可用；CN 退出后凭据与可选模型均为零，但未另发真实 CN Chat。确定性 401/重试和 CN disabled Usage 零请求测试已覆盖契约边界。最终 `npm test` 与 `npm run test:fast` 各 20/20，类型检查、两个 OpenSpec strict 检查、13 文件 pack dry-run 全部通过。首次默认 profile 并发探针超过 110 秒且无阶段记录，后续两次成功不能定位或排除偶发故障；本次不接受未量化的间歇性风险。重新批准前需以可保留阶段事件的隔离复现定位问题，或单独评估并明确接受该风险。旧 M3 的三模型、完整 vision、工具能力等非本次改动范围，保留 18.2.7 历史证据而不宣称 18.3.0 全量重测；故意制造官方 Gateway 401 或 CN Billing 请求不属于本候选必要门槛。历史 M3 勾选与 PASS 只对应 18.2.7。
+`rc.3` 的 OMP 18.3.0 **发布门槛已批准，tag 尚未创建或推送**。双站隔离 fresh OAuth、Chat、重启、强制刷新、一次并发 Chat、真实 CN Task 子会话 Provider/模型观察及按 realm 退出均已完成；CN 退出后凭据与可选模型为零、Intl Chat 保持可用，但未另发真实 CN Chat。确定性 401/重试和 CN disabled Usage 零请求契约已覆盖。发布决策文档修改后 `npm test`、`npm run test:fast` 各 20/20，类型检查、两个 OpenSpec strict 检查与 13 文件 pack dry-run 均通过；另在全新无凭据 profile 中完成官方 local install、plugin doctor（插件 `ok`、新 profile 的 `package_manifest` 警告）、uninstall、列表为零及专用 profile 清理。首次默认 profile 超时仍未定位，按上节的 10 轮复测**接受 RC 剩余风险**，不称已修复。单账号/串行换号、Bearer/Header 非原子身份绑定与本地 `X-User-Id` 诊断风险继续公开。旧 M3 的三模型、完整 vision、工具能力等保留 18.2.7 历史证据而不宣称 18.3.0 全量重测；故意制造官方 Gateway 401 或 CN Billing 请求不属于本候选必要门槛。历史 M3 勾选与 PASS 只对应 OMP 18.2.7。
