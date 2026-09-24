@@ -1,6 +1,6 @@
 # OMP WorkBuddy Connect
 
-> **当前源码为 v1.2.0-rc.3，针对 OMP 18.3.0 的 AuthStorage 命名空间接口；定向验收已批准 RC 发布门槛，但 tag 尚未创建或推送。**
+> **已发布 `v1.2.0-rc.3` GitHub tag，适配 OMP 18.3.0 的 AuthStorage 命名空间接口；定向验收批准 RC 发布，不等于稳定版验收。**
 >
 > 已发布的 v1.2.0-rc.2 基于 OMP 18.2.7。18.3.0 上完成了隔离 profile 的双站 fresh OAuth、Chat、跨进程重启、强制刷新、真实中国站 Task、同时发起的双站 Chat 及按 realm 退出；额外 10 轮双站并发探针（20 次 Chat）均在 30 秒内完成。此前默认 profile 的一次无阶段并发探针超过 110 秒，原因仍未查明；10 轮成功仅支持 **RC 剩余风险接受**，不代表该异常已修复或故障率有保证。受影响矩阵、旧版能力的证据边界及发布决定见 `openspec/changes/upgrade-omp-18-3-auth-storage/evidence.md` 和 `docs/omp-port/release-evidence.md`。
 
@@ -19,7 +19,7 @@ brew install oven-sh/bun/bun
 bun --version
 ```
 
-其他系统按 [Bun 官方安装说明](https://bun.sh/docs/installation) 安装，并确认 `bun --version` 可运行。`v1.2.0-rc.3` 发布后可固定安装：
+其他系统按 [Bun 官方安装说明](https://bun.sh/docs/installation) 安装，并确认 `bun --version` 可运行。固定安装 `v1.2.0-rc.3`：
 
 ```bash
 omp plugin install github:ha5h6r000wn/omp-workbuddy-connect#v1.2.0-rc.3
@@ -122,7 +122,7 @@ npm run typecheck
 - 不复用旧 Pi/Fork、DSH 或 Desktop credential；按目标 realm 分别执行 `/login workbuddy` 或 `/login workbuddy-cn`。
 - `.workbuddy-auth.json`、`WORKBUDDY_AUTH_FILE` 与 Desktop credential 没有优先级，也不是回退源；既有国际站 credential 仍只属于 `workbuddy`。
 - 旧 scope 设置不会跨 realm 导入；分别用 `/workbuddy free|all` 与 `/workbuddy-cn free|all` 明确选择。
-- 当前源码版本为 `v1.2.0-rc.3`（尚未发布）；最新已发布双 realm RC 为 `v1.2.0-rc.2`，稳定版仍为 `v1.1.7`。
+- 已发布双 realm RC 为 `v1.2.0-rc.3`，对应官方 OMP `18.3.0`；稳定版仍为 `v1.1.7`。
 
 ## v1 限制
 

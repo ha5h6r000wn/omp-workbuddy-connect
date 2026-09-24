@@ -32,7 +32,7 @@ OMP 18.3.0 以 `AuthStorage.oauth.accounts(provider, sessionId?)`、`credentials
 
 ## OMP 18.3.0 隔离 profile 定向真实验收
 
-2026-09-24 在 Darwin arm64、官方 `omp/18.3.0`、Node `v26.9.0`、Bun `1.4.2` 上验收未发布 `1.2.0-rc.3`。生产实现提交为 `a2c2b71caeabc12b8d3e97de78960c2ec0da4603`，双站登录/刷新/Task 真实验收源码基线为 `b5eb7666eaf11cc2d558711b9ec7fb2e7bec4f59`；后续 `0f620f3cffb3521ffe3b0a644eb51c712261d789` 仅更新文档/规格，本次并发复测以该提交的干净工作树启动。`a2c2b71..0f620f3` 的变更文件均为 README、发布证据或 OpenSpec，不含运行时与包声明；最终发布决策文档仍待提交，不能把上述源码基线当成最终 tag SHA。专用 profile `wb-183-rc3-live-0924` 与默认 profile 隔离；安装当前源码的插件后 doctor 显示插件 `ok`，新 profile 的 `package_manifest` 仍有“Not created yet”警告。以下只记脱敏的退出状态、模型/realm、行数、过期时间方向、阶段事件与自定义标记。
+2026-09-24 在 Darwin arm64、官方 `omp/18.3.0`、Node `v26.9.0`、Bun `1.4.2` 上验收当时尚未发布的 `1.2.0-rc.3`。生产实现提交为 `a2c2b71caeabc12b8d3e97de78960c2ec0da4603`，双站登录/刷新/Task 真实验收源码基线为 `b5eb7666eaf11cc2d558711b9ec7fb2e7bec4f59`；`0f620f3cffb3521ffe3b0a644eb51c712261d789` 仅更新文档/规格，本次并发复测以该提交的干净工作树启动；`0b066ea880aa1d00fda77d3f31375053c4da8106` 记录通过后的发布风险决定。`a2c2b71..0b066ea` 的变更文件均为 README、发布证据或 OpenSpec，不含运行时与包声明。最终发行提交可由 `git rev-parse 'v1.2.0-rc.3^{commit}'` 确定，不把任何验收基线冒充 tag SHA。专用 profile `wb-183-rc3-live-0924` 与默认 profile 隔离；安装当前源码的插件后 doctor 显示插件 `ok`，新 profile 的 `package_manifest` 仍有“Not created yet”警告。以下只记脱敏的退出状态、模型/realm、行数、过期时间方向、阶段事件与自定义标记。
 
 | 受影响路径 | 实际观察 | 证据边界 |
 |---|---|---|
@@ -60,4 +60,4 @@ OMP 18.3.0 以 `AuthStorage.oauth.accounts(provider, sessionId?)`、`credentials
 
 ## 发布门槛
 
-`rc.3` 的 OMP 18.3.0 **发布门槛已批准，tag 尚未创建或推送**。双站隔离 fresh OAuth、Chat、重启、强制刷新、一次并发 Chat、真实 CN Task 子会话 Provider/模型观察及按 realm 退出均已完成；CN 退出后凭据与可选模型为零、Intl Chat 保持可用，但未另发真实 CN Chat。确定性 401/重试和 CN disabled Usage 零请求契约已覆盖。发布决策文档修改后 `npm test`、`npm run test:fast` 各 20/20，类型检查、两个 OpenSpec strict 检查与 13 文件 pack dry-run 均通过；另在全新无凭据 profile 中完成官方 local install、plugin doctor（插件 `ok`、新 profile 的 `package_manifest` 警告）、uninstall、列表为零及专用 profile 清理。首次默认 profile 超时仍未定位，按上节的 10 轮复测**接受 RC 剩余风险**，不称已修复。单账号/串行换号、Bearer/Header 非原子身份绑定与本地 `X-User-Id` 诊断风险继续公开。旧 M3 的三模型、完整 vision、工具能力等保留 18.2.7 历史证据而不宣称 18.3.0 全量重测；故意制造官方 Gateway 401 或 CN Billing 请求不属于本候选必要门槛。历史 M3 勾选与 PASS 只对应 OMP 18.2.7。
+`rc.3` 的 OMP 18.3.0 **发布门槛已批准，发布标记 `v1.2.0-rc.3` 固定包含本证据的最终提交**。双站隔离 fresh OAuth、Chat、重启、强制刷新、一次并发 Chat、真实 CN Task 子会话 Provider/模型观察及按 realm 退出均已完成；CN 退出后凭据与可选模型为零、Intl Chat 保持可用，但未另发真实 CN Chat。确定性 401/重试和 CN disabled Usage 零请求契约已覆盖。发布决策文档修改后 `npm test`、`npm run test:fast` 各 20/20，类型检查、两个 OpenSpec strict 检查与 13 文件 pack dry-run 均通过；另在全新无凭据 profile 中完成官方 local install、plugin doctor（插件 `ok`、新 profile 的 `package_manifest` 警告）、uninstall、列表为零及专用 profile 清理。首次默认 profile 超时仍未定位，按上节的 10 轮复测**接受 RC 剩余风险**，不称已修复。单账号/串行换号、Bearer/Header 非原子身份绑定与本地 `X-User-Id` 诊断风险继续公开。旧 M3 的三模型、完整 vision、工具能力等保留 18.2.7 历史证据而不宣称 18.3.0 全量重测；故意制造官方 Gateway 401 或 CN Billing 请求不属于本候选必要门槛。历史 M3 勾选与 PASS 只对应 OMP 18.2.7。

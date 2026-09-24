@@ -17,4 +17,4 @@
 - [x] 在获授权的隔离 profile 中完成国际站与中国站 fresh OAuth、登录后 Chat、重启后 Chat、各自 forced refresh；先 CN logout 后 Intl 仍可 Chat，CN 凭据及可选模型均为零，再 Intl logout。CN 退出后未另发真实 Chat 请求；未修改默认 profile。
 - [x] 真实 CN Task 记录子会话 Provider/模型、请求前 hook 的 realm/模型与完成结果；隔离 profile 双站同时发起的 Chat 均完成。事件不含 Bearer，不能宣称逐请求原子绑定身份。
 - [x] 首次默认 profile 双站并发探针超过 110 秒且无阶段记录，原因仍未定位；后续默认 profile、早先隔离 profile 与本次隔离 profile 连续 10 轮、每轮两进程的有阶段记录并发均成功。本次明确接受**仅限 RC** 的未复现偶发风险，不宣称问题修复或故障率界限。
-- [x] auth-affected 矩阵后重新执行包、两种测试运行器、类型与双 OpenSpec strict 检查；隔离稳定性门槛通过后批准 `rc.3` 发布门槛，尚未创建或推送 tag。不重复与迁移无关的三模型、完整 vision、全工具及旧版 M3 能力矩阵；旧 M3 勾选仅对应 OMP 18.2.7。
+- [x] auth-affected 矩阵后重新执行包、两种测试运行器、类型与双 OpenSpec strict 检查；隔离稳定性门槛通过后批准 `rc.3` 发布。GitHub tag `v1.2.0-rc.3` 固定最终文档及实现提交，不重复与迁移无关的三模型、完整 vision、全工具及旧版 M3 能力矩阵；旧 M3 勾选仅对应 OMP 18.2.7。
